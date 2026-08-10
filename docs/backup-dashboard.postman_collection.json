@@ -1,0 +1,563 @@
+{
+  "info": {
+    "name": "Backup Dashboard API",
+    "description": "Postman collection for Backup Dashboard API. Set baseUrl, username, and password variables, then run Login to store token.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000"
+    },
+    {
+      "key": "username",
+      "value": "admin"
+    },
+    {
+      "key": "password",
+      "value": "your-configured-admin-password"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "profileId",
+      "value": "sample-configuration-backup"
+    },
+    {
+      "key": "snapshotId",
+      "value": ""
+    },
+    {
+      "key": "backupId",
+      "value": ""
+    },
+    {
+      "key": "repositoryId",
+      "value": "default"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.token) {",
+                  "  pm.collectionVariables.set('token', data.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": "{{baseUrl}}/api/login"
+          }
+        },
+        {
+          "name": "Validate Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/validate-token"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Profiles",
+      "item": [
+        {
+          "name": "List Profiles",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/profiles"
+          }
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/profiles/{{profileId}}"
+          }
+        },
+        {
+          "name": "Create PostgreSQL Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Main PostgreSQL\",\n  \"type\": \"postgresql\",\n  \"description\": \"Production PostgreSQL backup\",\n  \"enabled\": true,\n  \"schedule\": \"0 2 * * *\",\n  \"host\": \"192.168.11.74\",\n  \"port\": 5432,\n  \"username\": \"postgres\",\n  \"password\": \"secret\",\n  \"databases\": [\n    \"all\"\n  ],\n  \"max_backups\": 4,\n  \"repository_id\": \"default\"\n}"
+            },
+            "url": "{{baseUrl}}/api/profiles"
+          }
+        },
+        {
+          "name": "Create Redis Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Main Redis\",\n  \"type\": \"redis\",\n  \"description\": \"Production Redis backup\",\n  \"enabled\": true,\n  \"schedule\": \"0 3 * * *\",\n  \"host\": \"192.168.11.74\",\n  \"port\": 6379,\n  \"password\": \"\",\n  \"max_backups\": 4,\n  \"repository_id\": \"default\"\n}"
+            },
+            "url": "{{baseUrl}}/api/profiles"
+          }
+        },
+        {
+          "name": "Create MongoDB Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Main MongoDB\",\n  \"type\": \"mongodb\",\n  \"description\": \"Production MongoDB backup\",\n  \"enabled\": true,\n  \"schedule\": \"0 4 * * *\",\n  \"host\": \"192.168.11.74\",\n  \"port\": 27017,\n  \"username\": \"\",\n  \"password\": \"\",\n  \"databases\": [\n    \"all\"\n  ],\n  \"max_backups\": 4,\n  \"repository_id\": \"default\"\n}"
+            },
+            "url": "{{baseUrl}}/api/profiles"
+          }
+        },
+        {
+          "name": "Create Configuration Backup Profile - Key Auth",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"74 configs\",\n  \"type\": \"ssh_files\",\n  \"description\": \"Config files from server 74\",\n  \"enabled\": true,\n  \"schedule\": \"0 2 * * *\",\n  \"ssh_host\": \"192.168.11.74\",\n  \"ssh_port\": 22,\n  \"ssh_user\": \"root\",\n  \"auth_method\": \"key\",\n  \"ssh_password\": \"\",\n  \"path_configs\": [\n    {\n      \"path\": \"/root/compose\",\n      \"exclude_patterns\": [\n        \"test/\",\n        \"pg_data_gdb/\",\n        \"raster\",\n        \"gt_routing/\",\n        \"app/\",\n        \"elevation_data/\",\n        \"nominatim-data/\"\n      ]\n    }\n  ],\n  \"paths\": [\n    \"/root/compose\"\n  ],\n  \"exclude_patterns\": [],\n  \"preserve_metadata\": true,\n  \"log_rsync_output\": true,\n  \"max_backups\": 4,\n  \"repository_id\": \"default\"\n}"
+            },
+            "url": "{{baseUrl}}/api/profiles"
+          }
+        },
+        {
+          "name": "Create Configuration Backup Profile - Password Auth",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Config Backup Password Auth\",\n  \"type\": \"ssh_files\",\n  \"enabled\": true,\n  \"schedule\": \"0 2 * * *\",\n  \"ssh_host\": \"192.168.11.74\",\n  \"ssh_port\": 22,\n  \"ssh_user\": \"root\",\n  \"auth_method\": \"password\",\n  \"ssh_password\": \"secret\",\n  \"path_configs\": [\n    {\n      \"path\": \"/etc\",\n      \"exclude_patterns\": [\n        \"*.log\",\n        \"*.tmp\"\n      ]\n    },\n    {\n      \"path\": \"/opt/app/config\",\n      \"exclude_patterns\": [\n        \"cache/\",\n        \"*.pid\"\n      ]\n    }\n  ],\n  \"paths\": [\n    \"/etc\",\n    \"/opt/app/config\"\n  ],\n  \"exclude_patterns\": [],\n  \"preserve_metadata\": false,\n  \"log_rsync_output\": false,\n  \"max_backups\": 4,\n  \"repository_id\": \"default\"\n}"
+            },
+            "url": "{{baseUrl}}/api/profiles"
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated profile name\",\n  \"enabled\": true,\n  \"schedule\": \"30 2 * * *\",\n  \"max_backups\": 4,\n  \"repository_id\": \"default\"\n}"
+            },
+            "url": "{{baseUrl}}/api/profiles/{{profileId}}"
+          }
+        },
+        {
+          "name": "Delete Profile",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/profiles/{{profileId}}"
+          }
+        },
+        {
+          "name": "Get Configuration Backup Public Key",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/config-backup/public-key"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Restic Repositories",
+      "item": [
+        {
+          "name": "List Repositories",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/restic-repositories"
+          }
+        },
+        {
+          "name": "Get Repository",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/restic-repositories/{{repositoryId}}"
+          }
+        },
+        {
+          "name": "Create Local Repository",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/restic-repositories",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Local Repository\",\n  \"type\": \"local\",\n  \"repository\": \"/var/backups/restic-repo\",\n  \"password\": \"strong-restic-password\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create S3 Repository",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/restic-repositories",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"AWS S3 Backup\",\n  \"type\": \"s3\",\n  \"repository\": \"s3:s3.amazonaws.com/my-backup-bucket/prod\",\n  \"password\": \"strong-restic-password\",\n  \"aws_access_key_id\": \"AKIA...\",\n  \"aws_secret_access_key\": \"secret\",\n  \"aws_default_region\": \"us-east-1\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Internal S3-Compatible Repository",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Internal S3 Backup\",\n  \"type\": \"s3\",\n  \"endpoint\": \"https://s3.example.ir\",\n  \"bucket\": \"my-bucket\",\n  \"prefix\": \"backups/prod\",\n  \"password\": \"strong-restic-password\",\n  \"aws_access_key_id\": \"access-key\",\n  \"aws_secret_access_key\": \"secret-key\",\n  \"aws_default_region\": \"us-east-1\"\n}"
+            },
+            "url": "{{baseUrl}}/api/restic-repositories"
+          }
+        },
+        {
+          "name": "Create MinIO Repository",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/restic-repositories",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"MinIO Backup\",\n  \"type\": \"minio\",\n  \"repository\": \"s3:http://minio:9000/backups/prod\",\n  \"password\": \"strong-restic-password\",\n  \"aws_access_key_id\": \"minio-access-key\",\n  \"aws_secret_access_key\": \"minio-secret-key\",\n  \"aws_default_region\": \"us-east-1\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Repository",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/restic-repositories/{{repositoryId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Repository\",\n  \"repository\": \"s3:s3.amazonaws.com/my-backup-bucket/prod\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Check Repository",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/restic-repositories/{{repositoryId}}/check"
+          }
+        },
+        {
+          "name": "Init Repository",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/restic-repositories/{{repositoryId}}/init"
+          }
+        },
+        {
+          "name": "Delete Repository Definition",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/restic-repositories/{{repositoryId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Backup Operations",
+      "item": [
+        {
+          "name": "Trigger Selected Profile Backups",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"profile\",\n  \"profile_ids\": [\"{{profileId}}\"]\n}"
+            },
+            "url": "{{baseUrl}}/api/backup"
+          }
+        },
+        {
+          "name": "Trigger All Enabled Profile Backups",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"profile\",\n  \"profile_ids\": []\n}"
+            },
+            "url": "{{baseUrl}}/api/backup"
+          }
+        },
+        {
+          "name": "Trigger Legacy Full Backup",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"full\"\n}"
+            },
+            "url": "{{baseUrl}}/api/backup"
+          }
+        },
+        {
+          "name": "Backup Status",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/backup-status"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Snapshots and Backups",
+      "item": [
+        {
+          "name": "List Snapshots",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/snapshots"
+          }
+        },
+        {
+          "name": "List Backups",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/backups"
+          }
+        },
+        {
+          "name": "Get Snapshot Files",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/snapshot/{{snapshotId}}/files"
+          }
+        },
+        {
+          "name": "Download Backup",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/backup/{{backupId}}/download"
+          }
+        },
+        {
+          "name": "Delete Backup",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/backup/{{backupId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Logs and Scheduling",
+      "item": [
+        {
+          "name": "Logs",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/logs"
+          }
+        },
+        {
+          "name": "Get Global Schedule",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/schedule"
+          }
+        },
+        {
+          "name": "Update Global Schedule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cron\": \"0 2 * * *\",\n  \"mode\": \"full\"\n}"
+            },
+            "url": "{{baseUrl}}/api/schedule"
+          }
+        },
+        {
+          "name": "Update Profile Schedule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"profile_id\": \"{{profileId}}\",\n  \"cron\": \"30 2 * * *\"\n}"
+            },
+            "url": "{{baseUrl}}/api/profile-schedule"
+          }
+        }
+      ]
+    },
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Retention",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/retention"
+          }
+        },
+        {
+          "name": "Dashboard Status",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/status"
+          }
+        },
+        {
+          "name": "Health",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": "{{baseUrl}}/api/health"
+          }
+        }
+      ]
+    }
+  ]
+}

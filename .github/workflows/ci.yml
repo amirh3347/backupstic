@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: frontend/requirements.txt
+      - run: pip install --requirement frontend/requirements.txt
+      - run: python -m unittest discover -s tests -v
+      - run: python -m compileall -q backend frontend scripts tests
+      - name: Validate shell syntax
+        run: for script in init.sh scripts/*.sh; do bash -n "$script"; done
+      - name: Scan committed files for private keys
+        run: |
+          if git grep -nE -- 'BEGIN (OPENSSH|RSA|EC|DSA) PRIVATE KEY'; then
+            echo 'A private key is present in tracked files.' >&2
+            exit 1
+          fi
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: frontend/Dockerfile
+          push: false
+          tags: backupstic:ci

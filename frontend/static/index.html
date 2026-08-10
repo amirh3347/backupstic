@@ -1,0 +1,2872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backup Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --page: #0c1117;
+            --surface: #151b23;
+            --surface-2: #1b2430;
+            --surface-3: #263342;
+            --border: #334456;
+            --border-soft: #253242;
+            --text: #edf2f7;
+            --muted: #9fb0bf;
+            --faint: #6f8292;
+            --blue: #4f8cff;
+            --blue-2: #2f6fdb;
+            --cyan: #28c7d9;
+            --green: #2bb673;
+            --green-2: #178656;
+            --amber: #e1a83a;
+            --red: #d94c4c;
+            --violet: #9b7cff;
+            --shadow: rgba(0, 0, 0, 0.24);
+        }
+
+        body.theme-light {
+            --page: #f3f6f8;
+            --surface: #ffffff;
+            --surface-2: #f7fafc;
+            --surface-3: #e8eef3;
+            --border: #cdd8e1;
+            --border-soft: #dfe7ee;
+            --text: #17212b;
+            --muted: #526475;
+            --faint: #7a8b9a;
+            --blue: #2563eb;
+            --blue-2: #1d4ed8;
+            --cyan: #0891b2;
+            --green: #15905d;
+            --green-2: #0f754b;
+            --amber: #bd7a16;
+            --red: #c43f3f;
+            --violet: #7456d8;
+            --shadow: rgba(31, 45, 61, 0.10);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background:
+                radial-gradient(circle at 18% 0%, rgba(40, 199, 217, 0.14), transparent 30%),
+                radial-gradient(circle at 84% 8%, rgba(155, 124, 255, 0.13), transparent 28%),
+                linear-gradient(180deg, rgba(42, 57, 71, 0.62) 0, rgba(16, 20, 24, 0) 300px),
+                var(--page);
+            color: var(--text);
+            min-height: 100vh;
+            position: relative;
+        }
+
+        body.theme-light {
+            background:
+                radial-gradient(circle at 18% 0%, rgba(8, 145, 178, 0.12), transparent 30%),
+                radial-gradient(circle at 84% 8%, rgba(116, 86, 216, 0.10), transparent 28%),
+                linear-gradient(180deg, rgba(217, 229, 239, 0.9) 0, rgba(243, 246, 248, 0) 300px),
+                var(--page);
+        }
+
+        .header {
+            background: rgba(23, 29, 36, 0.94);
+            padding: 16px clamp(20px, 3vw, 48px);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            backdrop-filter: blur(12px);
+        }
+
+        body.theme-light .header {
+            background: rgba(255, 255, 255, 0.92);
+        }
+
+        .header h1 {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text);
+            letter-spacing: 0;
+        }
+
+        .header .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--muted);
+            margin-left: auto;
+        }
+
+        .header .btn-logout {
+            padding: 8px 14px;
+            border-radius: 6px;
+            background: rgba(217, 76, 76, 0.18);
+            color: white;
+            border: 1px solid rgba(217, 76, 76, 0.5);
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .header .btn-logout:hover {
+            background: rgba(217, 76, 76, 0.28);
+        }
+
+        .theme-toggle {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+            color: var(--text);
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .theme-toggle:hover {
+            background: var(--surface-3);
+        }
+
+        .status-badge {
+            padding: 7px 12px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .status-healthy { background: rgba(43, 182, 115, 0.15); color: #73e0aa; border: 1px solid rgba(43, 182, 115, 0.35); }
+        .status-error { background: rgba(217, 76, 76, 0.15); color: #ff9b9b; border: 1px solid rgba(217, 76, 76, 0.35); }
+        .status-warning { background: rgba(217, 154, 43, 0.14); color: #f4c266; border: 1px solid rgba(217, 154, 43, 0.35); }
+
+        .container {
+            width: 100%;
+            max-width: 1920px;
+            margin: 0 auto;
+            padding: 28px clamp(18px, 2.4vw, 44px) 44px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+
+        .stat-card {
+            background: linear-gradient(180deg, rgba(34, 47, 60, 0.96), rgba(21, 27, 35, 0.98));
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid var(--border);
+            min-height: 130px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 18px 34px var(--shadow);
+        }
+
+        body.theme-light .stat-card {
+            background: linear-gradient(180deg, #ffffff, #f8fbfd);
+            box-shadow: 0 14px 28px rgba(31, 45, 61, 0.08);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 3px;
+            background: var(--blue);
+        }
+
+        .stat-card:nth-child(2)::before { background: var(--green); }
+        .stat-card:nth-child(3)::before { background: var(--amber); }
+        .stat-card:nth-child(4)::before { background: var(--violet); }
+
+        .stat-card:hover {
+            border-color: #455868;
+        }
+
+        .stat-card .label {
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .stat-card .value {
+            font-size: 34px;
+            font-weight: 700;
+            color: var(--text);
+            line-height: 1.05;
+        }
+
+        .stat-card .sub {
+            font-size: 13px;
+            color: var(--faint);
+            margin-top: 8px;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: minmax(680px, 1.25fr) minmax(520px, 0.75fr);
+            gap: 18px;
+            align-items: start;
+        }
+
+        .side-column {
+            display: grid;
+            gap: 18px;
+            min-width: 0;
+        }
+
+        .card {
+            background: rgba(23, 29, 36, 0.96);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            box-shadow: 0 18px 38px var(--shadow);
+        }
+
+        body.theme-light .card {
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: 0 14px 32px rgba(31, 45, 61, 0.08);
+        }
+
+        .card-header {
+            padding: 16px 18px;
+            border-bottom: 1px solid var(--border-soft);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            background: linear-gradient(90deg, rgba(29, 38, 48, 0.94), rgba(29, 38, 48, 0.58));
+        }
+
+        body.theme-light .card-header {
+            background: rgba(247, 250, 252, 0.86);
+        }
+
+        .card-header h2 {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .card-header .btn {
+            padding: 8px 16px;
+            font-size: 14px;
+        }
+
+        .card-body {
+            padding: 18px;
+            overflow-x: auto;
+        }
+
+        .profiles-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 860px;
+        }
+
+        .profiles-table th,
+        .profiles-table td {
+            padding: 14px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-soft);
+        }
+
+        .profiles-table th {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--muted);
+            text-transform: uppercase;
+            background: rgba(16, 20, 24, 0.38);
+        }
+
+        body.theme-light .profiles-table th,
+        body.theme-light .backups-table th {
+            background: #f5f8fb;
+        }
+
+        .profiles-table tbody tr:hover td {
+            background-color: rgba(36, 49, 61, 0.72);
+        }
+
+        body.theme-light .profiles-table tbody tr:hover td,
+        body.theme-light .backups-table tbody tr:hover td {
+            background-color: #eef4f8;
+        }
+
+        .profile-type {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .type-postgresql { background: rgba(79, 140, 255, 0.14); color: #9fc2ff; border: 1px solid rgba(79, 140, 255, 0.25); }
+        .type-mongodb { background: rgba(43, 182, 115, 0.14); color: #8be0b5; border: 1px solid rgba(43, 182, 115, 0.25); }
+        .type-redis { background: rgba(217, 76, 76, 0.14); color: #ffa2a2; border: 1px solid rgba(217, 76, 76, 0.25); }
+        .type-ssh-files { background: rgba(155, 124, 255, 0.14); color: #c6b5ff; border: 1px solid rgba(155, 124, 255, 0.25); }
+
+        .profile-status {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .status-enabled { background: rgba(43, 182, 115, 0.14); color: #a6e9c7; }
+        .status-disabled { background: rgba(217, 76, 76, 0.14); color: #ffc1c1; }
+
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-primary { background: var(--blue); color: white; }
+        .btn-primary:hover { background: var(--blue-2); }
+
+        .btn-success { background: var(--green); color: white; }
+        .btn-success:hover { background: var(--green-2); }
+
+        .btn-warning { background: var(--amber); color: #151515; }
+        .btn-warning:hover { background: #bf8422; }
+
+        .btn-danger { background: var(--red); color: white; }
+        .btn-danger:hover { background: #b93b3b; }
+
+        .btn-outline {
+            border: 1px solid var(--border);
+            color: #b8c8d8;
+            background: rgba(16, 20, 24, 0.2);
+        }
+
+        body.theme-light .btn-outline {
+            background: #ffffff;
+            color: #273746;
+        }
+
+        .btn-outline:hover {
+            background: var(--surface-3);
+            color: white;
+            border-color: #4b6275;
+        }
+
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 12px;
+            border-radius: 6px;
+        }
+
+        .btn:disabled,
+        .btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .backups-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+            min-width: 620px;
+        }
+
+        .backups-table th,
+        .backups-table td {
+            padding: 12px 14px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-soft);
+            font-size: 13px;
+        }
+
+        .backups-table th {
+            font-weight: 600;
+            color: var(--muted);
+            text-transform: uppercase;
+            font-size: 11px;
+            background: rgba(16, 20, 24, 0.38);
+        }
+
+        .backups-table tbody tr:hover td {
+            background-color: rgba(36, 49, 61, 0.72);
+        }
+
+        .backup-size {
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+
+        .backup-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .backup-tag {
+            background: var(--surface-3);
+            color: var(--text);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+
+        .backup-filters {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .backup-filters select {
+            flex: 1;
+            min-width: 140px;
+            padding: 9px 10px;
+            border-radius: 6px;
+            background: #0f151b;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        body.theme-light .backup-filters select {
+            background: #ffffff;
+        }
+
+        .pagination-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 12px;
+            gap: 10px;
+        }
+
+        .pagination-row span {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .backup-form-layout {
+            display: grid;
+            gap: 16px;
+        }
+
+        .backup-mode-row {
+            display: grid;
+            grid-template-columns: minmax(220px, 0.45fr) minmax(0, 1fr);
+            gap: 16px;
+            align-items: start;
+        }
+
+        .profile-select-list {
+            display: grid;
+            gap: 10px;
+            max-height: 420px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .profile-select-card {
+            display: grid;
+            grid-template-columns: 22px minmax(0, 1fr) auto;
+            gap: 12px;
+            align-items: center;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #111820;
+            cursor: pointer;
+        }
+
+        body.theme-light .profile-select-card {
+            background: #f8fbfd;
+        }
+
+        .profile-select-card:hover {
+            border-color: #4b6275;
+            background: var(--surface-2);
+        }
+
+        .profile-select-card input {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--blue);
+        }
+
+        .profile-select-main {
+            min-width: 0;
+        }
+
+        .profile-select-name {
+            color: var(--text);
+            font-weight: 650;
+            font-size: 14px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .profile-select-meta {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 5px;
+            color: var(--faint);
+            font-size: 12px;
+        }
+
+        .profile-select-list.disabled {
+            opacity: 0.55;
+        }
+
+        .profile-select-list.disabled .profile-select-card {
+            cursor: not-allowed;
+        }
+
+        .backup-selection-summary {
+            color: var(--muted);
+            font-size: 13px;
+            min-height: 18px;
+        }
+
+        .backup-modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            border-top: 1px solid var(--border);
+            padding-top: 16px;
+        }
+
+        .repositories-card {
+            margin-top: 0;
+        }
+
+        .repositories-table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 560px;
+        }
+
+        .repositories-table th,
+        .repositories-table td {
+            padding: 12px 14px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-soft);
+            font-size: 13px;
+        }
+
+        .repositories-table th {
+            font-weight: 600;
+            color: var(--muted);
+            text-transform: uppercase;
+            font-size: 11px;
+            background: rgba(16, 20, 24, 0.38);
+        }
+
+        .repositories-table tbody tr:hover td {
+            background-color: rgba(36, 49, 61, 0.72);
+        }
+
+        body.theme-light .repositories-table th {
+            background: #f5f8fb;
+        }
+
+        body.theme-light .repositories-table tbody tr:hover td {
+            background-color: #eef4f8;
+        }
+
+        .repo-path {
+            max-width: 520px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-family: 'Monaco', 'Menlo', monospace;
+            color: var(--muted);
+        }
+
+        .form-hint {
+            margin-top: 6px;
+            color: var(--faint);
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        .repository-form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px 20px;
+            align-items: start;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.58);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal {
+            background: var(--surface);
+            border-radius: 8px;
+            width: min(1180px, calc(100vw - 48px));
+            max-height: calc(100vh - 48px);
+            overflow-y: auto;
+            border: 1px solid var(--border);
+        }
+
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .modal-header .btn-close {
+            background: transparent;
+            border: none;
+            font-size: 20px;
+            color: var(--muted);
+            cursor: pointer;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-header .btn-close:hover {
+            color: var(--text);
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .profile-form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px 20px;
+            align-items: start;
+        }
+
+        .form-span-2 {
+            grid-column: 1 / -1;
+        }
+
+        .type-fields {
+            grid-column: 1 / -1;
+            display: none;
+            border-top: 1px solid var(--border);
+            padding-top: 18px;
+            margin-top: 2px;
+        }
+
+        .type-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px 20px;
+        }
+
+        .form-actions {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            border-top: 1px solid var(--border);
+            padding-top: 16px;
+            margin-top: 4px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: #0f151b;
+            color: var(--text);
+            font-size: 14px;
+        }
+
+        body.theme-light .form-group input,
+        body.theme-light .form-group select,
+        body.theme-light .form-group textarea {
+            background: #ffffff;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--blue);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+        }
+
+        .checkbox-group label {
+            margin-bottom: 0;
+        }
+
+        .ssh-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(360px, 1.25fr);
+            gap: 20px;
+            align-items: start;
+        }
+
+        .ssh-connection-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .ssh-paths-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .ssh-paths-header h3 {
+            font-size: 14px;
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .ssh-path-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .ssh-path-item {
+            border: 1px solid var(--border);
+            background: #111820;
+            border-radius: 8px;
+            padding: 14px;
+        }
+
+        body.theme-light .ssh-path-item {
+            background: #f8fbfd;
+        }
+
+        .ssh-path-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .ssh-path-item-title {
+            color: #cbd8e4;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .ssh-path-grid {
+            display: grid;
+            grid-template-columns: minmax(220px, 1fr) minmax(240px, 1fr);
+            gap: 12px;
+        }
+
+        .ssh-path-grid textarea {
+            min-height: 64px;
+        }
+
+        .tags-input {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            min-height: 40px;
+            padding: 8px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .tag-item {
+            background: var(--blue);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .tag-item .remove-tag {
+            cursor: pointer;
+            font-size: 10px;
+        }
+
+        .input-tag {
+            flex: 1;
+            min-width: 80px;
+            padding: 4px;
+            border: none;
+            background: transparent;
+            color: var(--text);
+        }
+
+        .input-tag:focus {
+            outline: none;
+        }
+
+        .backup-banner {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            background: rgba(79, 140, 255, 0.12);
+            border: 1px solid rgba(79, 140, 255, 0.34);
+            color: #b6ceff;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .backup-banner.active {
+            display: flex;
+        }
+
+        .backup-banner .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--blue);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            flex-shrink: 0;
+        }
+
+        .btn:disabled,
+        .btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .disk-bar {
+            width: 100%;
+            height: 8px;
+            background: #26333f;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        body.theme-light .disk-bar {
+            background: #dfe7ee;
+        }
+
+        .disk-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.5s;
+        }
+
+        .disk-ok { background: var(--green); }
+        .disk-warn { background: var(--amber); }
+        .disk-danger { background: var(--red); }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--faint);
+        }
+
+        .empty-state h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+            color: var(--muted);
+        }
+
+        .empty-state p {
+            font-size: 14px;
+            color: var(--faint);
+        }
+
+        .login-container {
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .login-card {
+            background: var(--surface);
+            border-radius: 8px;
+            padding: 32px;
+            border: 1px solid var(--border);
+        }
+
+        body.theme-light .login-card {
+            box-shadow: 0 18px 40px rgba(31, 45, 61, 0.10);
+        }
+
+        .login-card h2 {
+            text-align: center;
+            margin-bottom: 24px;
+            color: var(--text);
+        }
+
+        .login-form .form-group {
+            margin-bottom: 20px;
+        }
+
+        .login-form .btn-primary {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+        }
+
+        .login-error {
+            margin-top: 12px;
+            color: #ff9b9b;
+            text-align: center;
+            min-height: 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 14px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #fff;
+            z-index: 2000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        .toast-success { background: var(--green-2); }
+        .toast-error { background: #b93b3b; }
+        .toast-info { background: var(--blue-2); }
+
+        @media (max-width: 1024px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .main-content { grid-template-columns: 1fr; }
+            .side-column { grid-template-columns: 1fr; }
+            .container { padding: 20px; }
+            .profile-form-grid,
+            .type-grid,
+            .ssh-layout,
+            .ssh-connection-grid,
+            .ssh-path-grid,
+            .backup-mode-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .stats-grid { grid-template-columns: 1fr; }
+            .header { padding: 16px 20px; }
+            .header h1 { font-size: 18px; }
+            .container { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="auth-container">
+        <!-- Login Screen -->
+        <div id="login-screen" class="login-container">
+            <div class="login-card">
+                <h2>Backup Dashboard</h2>
+                <form id="login-form" class="login-form">
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" placeholder="Enter username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" placeholder="Enter password" required>
+                    </div>
+                    <button type="submit" class="btn-primary" id="login-btn">Sign In</button>
+                    <div id="login-error" class="login-error"></div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Main App (hidden initially) -->
+        <div id="app-container" style="display: none;">
+            <div class="header">
+                <h1>Backup Dashboard</h1>
+                <div class="user-info">
+                    <span id="username-display"></span>
+                    <button class="theme-toggle" id="themeToggle" type="button">Light</button>
+                    <button class="btn-logout" id="logout-btn">Logout</button>
+                </div>
+                <span class="status-badge status-healthy" id="statusBadge">Loading...</span>
+            </div>
+
+            <div class="container">
+                <!-- Backup in progress banner -->
+                <div class="backup-banner" id="backupBanner">
+                    <span class="spinner"></span>
+                    <span id="backupBannerText">A backup is running…</span>
+                </div>
+
+                <!-- Stats -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="label">Total Profiles</div>
+                        <div class="value" id="profileCount">-</div>
+                        <div class="sub">configured backup profiles</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Total Backups</div>
+                        <div class="value" id="backupCount">-</div>
+                        <div class="sub">successful backups</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Disk Used</div>
+                        <div class="value" id="diskUsed">-</div>
+                        <div class="disk-bar"><div class="disk-bar-fill disk-ok" id="diskBar" style="width: 0%"></div></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Disk Available</div>
+                        <div class="value" id="diskAvail">-</div>
+                        <div class="sub" id="diskPercent">-</div>
+                    </div>
+                </div>
+
+                <!-- Main Content -->
+                <div class="main-content">
+                    <!-- Profiles List -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h2>Backup Profiles</h2>
+                            <div class="btn-group">
+                                <button class="btn btn-primary" id="addProfileBtn">New Profile</button>
+                                <button class="btn btn-success" id="backupNowBtn">Backup Now</button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <table class="profiles-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Type</th>
+                                        <th>Repository</th>
+                                        <th>Keep</th>
+                                        <th>Schedule</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="profilesTableBody">
+                                    <tr><td colspan="7" class="empty-state"><h3>Loading profiles...</h3></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="side-column">
+                        <!-- Backups List -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h2>Recent Backups</h2>
+                                <button class="btn btn-sm btn-outline" id="refreshBackupsBtn">Refresh</button>
+                            </div>
+                            <div class="card-body">
+                                <div class="backup-filters">
+                                    <select id="filterRepository">
+                                        <option value="">All repositories</option>
+                                    </select>
+                                    <select id="filterProfile">
+                                        <option value="">All profiles</option>
+                                    </select>
+                                    <select id="filterType">
+                                        <option value="">All types</option>
+                                        <option value="postgresql">PostgreSQL</option>
+                                        <option value="mongodb">MongoDB</option>
+                                        <option value="redis">Redis</option>
+                                        <option value="ssh_files">Configuration Backup</option>
+                                    </select>
+                                </div>
+                                <table class="backups-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>Profile</th>
+                                            <th>Repository</th>
+                                            <th>Size</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="backupsTableBody">
+                                        <tr><td colspan="5" class="empty-state"><h3>No backups yet</h3></td></tr>
+                                    </tbody>
+                                </table>
+                                <div id="backupPagination" class="pagination-row">
+                                    <button class="btn btn-sm btn-outline" id="backupPrev">‹ Prev</button>
+                                    <span id="backupPageInfo">-</span>
+                                    <button class="btn btn-sm btn-outline" id="backupNext">Next ›</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card repositories-card">
+                            <div class="card-header">
+                                <h2>Restic Repositories</h2>
+                                <button class="btn btn-primary" id="addRepositoryBtn">New Repository</button>
+                            </div>
+                            <div class="card-body">
+                                <table class="repositories-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Type</th>
+                                            <th>Repository</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="repositoriesTableBody">
+                                        <tr><td colspan="4" class="empty-state"><h3>Loading repositories...</h3></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="profileModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modalTitle">Add Profile</h2>
+                <button class="btn-close" id="profileModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="profileForm" class="profile-form-grid">
+                    <input type="hidden" id="profileId">
+                    
+                    <div class="form-group">
+                        <label for="profileName">Profile Name</label>
+                        <input type="text" id="profileName" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="profileType">Profile Type</label>
+                        <select id="profileType" required>
+                            <option value="">Select type</option>
+                            <option value="postgresql">PostgreSQL</option>
+                            <option value="mongodb">MongoDB</option>
+                            <option value="redis">Redis</option>
+                            <option value="ssh_files">Configuration Backup</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group form-span-2">
+                        <label for="profileDescription">Description (optional)</label>
+                        <textarea id="profileDescription"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="profileEnabled">Enabled</label>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="profileEnabled" checked>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="profileSchedule">Cron Schedule</label>
+                        <input type="text" id="profileSchedule" placeholder="0 2 * * *" value="0 2 * * *">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profileMaxBackups">Backups To Keep</label>
+                        <input type="number" id="profileMaxBackups" min="0" value="0" placeholder="0 = use global retention">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profileRepository">Restic Repository</label>
+                        <select id="profileRepository"></select>
+                    </div>
+                    
+                    <!-- PostgreSQL Fields -->
+                    <div id="postgresqlFields" class="type-fields">
+                        <div class="type-grid">
+                        <div class="form-group">
+                            <label for="pgHost">Host</label>
+                            <input type="text" id="pgHost" placeholder="localhost">
+                        </div>
+                        <div class="form-group">
+                            <label for="pgPort">Port</label>
+                            <input type="number" id="pgPort" value="5432" min="1" max="65535">
+                        </div>
+                        <div class="form-group">
+                            <label for="pgUsername">Username</label>
+                            <input type="text" id="pgUsername" placeholder="postgres">
+                        </div>
+                        <div class="form-group">
+                            <label for="pgPassword">Password</label>
+                            <input type="password" id="pgPassword" placeholder="••••••••">
+                        </div>
+                        <div class="form-group">
+                            <label for="pgDatabases">Databases (comma-separated)</label>
+                            <input type="text" id="pgDatabases" placeholder="db1,db2,db3 or leave empty for all">
+                        </div>
+                        </div>
+                    </div>
+                    
+                    <!-- MongoDB Fields -->
+                    <div id="mongodbFields" class="type-fields">
+                        <div class="type-grid">
+                        <div class="form-group">
+                            <label for="mongoHost">Host</label>
+                            <input type="text" id="mongoHost" placeholder="localhost">
+                        </div>
+                        <div class="form-group">
+                            <label for="mongoPort">Port</label>
+                            <input type="number" id="mongoPort" value="27017" min="1" max="65535">
+                        </div>
+                        <div class="form-group">
+                            <label for="mongoUsername">Username (optional)</label>
+                            <input type="text" id="mongoUsername" placeholder="admin">
+                        </div>
+                        <div class="form-group">
+                            <label for="mongoPassword">Password (optional)</label>
+                            <input type="password" id="mongoPassword" placeholder="••••••••">
+                        </div>
+                        <div class="form-group">
+                            <label for="mongoDatabases">Databases (comma-separated)</label>
+                            <input type="text" id="mongoDatabases" placeholder="db1,db2 or leave empty for all">
+                        </div>
+                        </div>
+                    </div>
+
+                    <!-- Redis Fields -->
+                    <div id="redisFields" class="type-fields">
+                        <div class="type-grid">
+                        <div class="form-group">
+                            <label for="redisHost">Host</label>
+                            <input type="text" id="redisHost" placeholder="localhost">
+                        </div>
+                        <div class="form-group">
+                            <label for="redisPort">Port</label>
+                            <input type="number" id="redisPort" value="6379" min="1" max="65535">
+                        </div>
+                        <div class="form-group">
+                            <label for="redisPassword">Password (optional)</label>
+                            <input type="password" id="redisPassword" placeholder="••••••••">
+                        </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Configuration Backup Fields -->
+                    <div id="sshFields" class="type-fields">
+                        <div class="ssh-layout">
+                            <div>
+                                <div class="ssh-connection-grid">
+                                    <div class="form-group">
+                                        <label for="sshHost">SSH Host</label>
+                                        <input type="text" id="sshHost" placeholder="example.com">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sshPort">SSH Port</label>
+                                        <input type="number" id="sshPort" value="22" min="1" max="65535">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sshUsername">SSH Username</label>
+                                        <input type="text" id="sshUsername" placeholder="username">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="sshAuthMethod">Authentication</label>
+                                        <select id="sshAuthMethod">
+                                            <option value="key">Application SSH Key</option>
+                                            <option value="password">Password</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-group" id="sshPasswordGroup" style="display: none;">
+                                    <label for="sshPassword">SSH Password</label>
+                                    <input type="password" id="sshPassword" placeholder="••••••••">
+                                </div>
+                                <div class="form-group" id="sshPublicKeyGroup">
+                                    <label for="sshPublicKey">Application Public Key</label>
+                                    <textarea id="sshPublicKey" rows="3" readonly placeholder="Public key is not configured"></textarea>
+                                </div>
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="sshPreserveMetadata">
+                                    <label for="sshPreserveMetadata">Preserve ownership, permissions, timestamps, and symlinks</label>
+                                </div>
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="sshLogRsyncOutput">
+                                    <label for="sshLogRsyncOutput">Log rsync output</label>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="ssh-paths-header">
+                                    <h3>Backup Paths</h3>
+                                    <button type="button" class="btn btn-sm btn-outline" id="addSshPathBtn">+ Path</button>
+                                </div>
+                                <div id="sshPathList" class="ssh-path-list"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary" id="profileSaveBtn">Save Profile</button>
+                        <button type="button" class="btn btn-outline" id="profileCancelBtn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="backupModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Backup Now</h2>
+                <button class="btn-close" id="backupModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="backupForm" class="backup-form-layout">
+                    <div class="backup-mode-row">
+                        <div class="form-group">
+                            <label for="backupMode">Backup Mode</label>
+                            <select id="backupMode">
+                                <option value="selected">Selected Profiles Only</option>
+                                <option value="all-enabled">All Enabled Profiles</option>
+                            </select>
+                        </div>
+                        <div>
+                            <div class="ssh-paths-header">
+                                <h3>Profiles</h3>
+                                <span id="backupSelectionSummary" class="backup-selection-summary"></span>
+                            </div>
+                            <div id="profileCheckboxes" class="profile-select-list">
+                                <!-- Profile checkboxes will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="backup-modal-actions">
+                        <button type="submit" class="btn btn-primary" id="backupStartBtn">Start Backup</button>
+                        <button type="button" class="btn btn-outline" id="backupCancelBtn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="repositoryModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="repositoryModalTitle">Add Repository</h2>
+                <button class="btn-close" id="repositoryModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="repositoryForm" class="repository-form-grid">
+                    <input type="hidden" id="repositoryId">
+
+                    <div class="form-group">
+                        <label for="repositoryName">Repository Name</label>
+                        <input type="text" id="repositoryName" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="repositoryType">Repository Type</label>
+                        <select id="repositoryType" required>
+                            <option value="local">Local</option>
+                            <option value="s3">S3</option>
+                            <option value="minio">MinIO</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group form-span-2">
+                        <label for="repositoryPath">Restic Repository</label>
+                        <input type="text" id="repositoryPath" placeholder="/var/backups/restic-repo" required>
+                        <div class="form-hint" id="repositoryPathHint">Local filesystem path for the Restic repository.</div>
+                    </div>
+
+                    <div class="form-group repo-remote-field">
+                        <label for="repositoryEndpoint">S3 Endpoint</label>
+                        <input type="text" id="repositoryEndpoint" placeholder="https://s3.example.com">
+                        <div class="form-hint">For internal providers, enter the endpoint address they gave you.</div>
+                    </div>
+
+                    <div class="form-group repo-remote-field">
+                        <label for="repositoryBucketPath">Bucket / Prefix</label>
+                        <input type="text" id="repositoryBucketPath" placeholder="bucket-name/backups/prod">
+                        <div class="form-hint">Bucket is required; prefix/path after bucket is optional.</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="repositoryPassword">Restic Password</label>
+                        <input type="password" id="repositoryPassword" placeholder="Leave blank to keep current password">
+                    </div>
+
+                    <div class="form-group repo-remote-field">
+                        <label for="repositoryRegion">Region</label>
+                        <input type="text" id="repositoryRegion" placeholder="us-east-1">
+                    </div>
+
+                    <div class="form-group repo-remote-field">
+                        <label for="repositoryAccessKey">Access Key</label>
+                        <input type="password" id="repositoryAccessKey" placeholder="Leave blank to keep current key">
+                    </div>
+
+                    <div class="form-group repo-remote-field">
+                        <label for="repositorySecretKey">Secret Key</label>
+                        <input type="password" id="repositorySecretKey" placeholder="Leave blank to keep current secret">
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary" id="repositorySaveBtn">Save Repository</button>
+                        <button type="button" class="btn btn-outline" id="repositoryCancelBtn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast" style="display: none;"></div>
+
+    <script>
+        const API = '';
+        let backupRunning = false;
+        let currentUser = '';
+        let profiles = [];
+        let repositories = [];
+        let backups = [];
+        let authToken = null;
+        let backupPendingRefresh = false;
+        let backupSeenRunning = false;
+        let backupStartPollAt = 0;
+
+        // Recent-backups view state (client-side filter + pagination)
+        let backupsAll = [];
+        let backupPage = 1;
+        const backupPageSize = 8;
+        // Tags restic writes alongside the profile name; used to tell a "type"
+        // tag apart from the profile-name tag on each snapshot.
+        const BACKUP_TYPES = ['postgresql', 'mongodb', 'redis', 'ssh_files'];
+
+        function snapProfileName(snap) {
+            if (snap.profile_name) return snap.profile_name;
+            return (snap.tags || []).find(t =>
+                !BACKUP_TYPES.includes(t) &&
+                t !== 'ssh-files' &&
+                t !== 'files' &&
+                !String(t).startsWith('profile:')
+            ) || 'Unknown';
+        }
+        function snapType(snap) {
+            const t = (snap.tags || []).find(x => BACKUP_TYPES.includes(x) || x === 'ssh-files');
+            return t === 'ssh-files' ? 'ssh_files' : (t || '');
+        }
+
+        // Auth functions
+        function login(username, password) {
+            return fetch(`${API}/api/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+        }
+
+        function logout() {
+            return fetch(`${API}/api/logout`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                }
+            });
+        }
+
+        function setAuthToken(token) {
+            authToken = token;
+            sessionStorage.setItem('authToken', token);
+        }
+
+        function getAuthToken() {
+            if (!authToken) {
+                authToken = sessionStorage.getItem('authToken');
+            }
+            return authToken;
+        }
+
+        function isAuthenticated() {
+            return !!getAuthToken();
+        }
+
+        function applyTheme(theme) {
+            const selected = theme === 'light' ? 'light' : 'dark';
+            document.body.classList.toggle('theme-light', selected === 'light');
+            localStorage.setItem('dashboardTheme', selected);
+            const toggle = document.getElementById('themeToggle');
+            if (toggle) {
+                toggle.textContent = selected === 'light' ? 'Dark' : 'Light';
+                toggle.setAttribute('aria-label', `Switch to ${selected === 'light' ? 'dark' : 'light'} theme`);
+            }
+        }
+
+        function initTheme() {
+            applyTheme(localStorage.getItem('dashboardTheme') || 'dark');
+        }
+
+        function toggleTheme() {
+            const next = document.body.classList.contains('theme-light') ? 'dark' : 'light';
+            applyTheme(next);
+        }
+
+        // Toast notification
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast toast-${type}`;
+            toast.style.display = 'block';
+            setTimeout(() => toast.style.display = 'none', 4000);
+        }
+
+        // Format date
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            return d.toLocaleString();
+        }
+
+        // Short ID
+        function shortId(id) {
+            return id ? id.substring(0, 8) : '-';
+        }
+
+        // Profile type class
+        function typeClass(type) {
+            const t = type.toLowerCase();
+            if (t.includes('postgresql') || t.includes('postgres')) return 'type-postgresql';
+            if (t.includes('mongo')) return 'type-mongodb';
+            if (t.includes('redis')) return 'type-redis';
+            if (t.includes('ssh')) return 'type-ssh-files';
+            return '';
+        }
+
+        function typeLabel(type) {
+            return type === 'ssh_files' ? 'Configuration Backup' : type;
+        }
+
+        function repositoryTypeLabel(type) {
+            if (type === 'minio') return 'MinIO';
+            if (type === 's3') return 'S3';
+            return 'Local';
+        }
+
+        function repositoryName(id) {
+            const repo = repositories.find(item => item.id === (id || 'default'));
+            return repo ? repo.name : 'Default Local Repository';
+        }
+
+        // Status class
+        function statusClass(enabled) {
+            return enabled ? 'status-enabled' : 'status-disabled';
+        }
+
+        // Status text
+        function statusText(enabled) {
+            return enabled ? 'Enabled' : 'Disabled';
+        }
+
+        // Load profile checkboxes for backup modal
+        function loadProfileCheckboxes() {
+            const container = document.getElementById('profileCheckboxes');
+            container.innerHTML = '';
+            const enabledProfiles = profiles.filter(profile => profile.enabled);
+
+            if (enabledProfiles.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h3>No enabled profiles</h3></div>';
+                updateBackupSelectionState();
+                return;
+            }
+
+            container.innerHTML = enabledProfiles.map(profile => `
+                <label class="profile-select-card">
+                    <input type="checkbox" value="${profile.id}" checked>
+                    <span class="profile-select-main">
+                        <span class="profile-select-name">${escapeHtml(profile.name || 'Unnamed')}</span>
+                        <span class="profile-select-meta">
+                            <span class="profile-type ${typeClass(profile.type)}">${typeLabel(profile.type)}</span>
+                            <span>${escapeHtml(profile.schedule || 'No schedule')}</span>
+                        </span>
+                    </span>
+                    <span class="profile-status ${statusClass(profile.enabled)}">${statusText(profile.enabled)}</span>
+                </label>
+            `).join('');
+            updateBackupSelectionState();
+        }
+
+        function updateBackupSelectionState() {
+            const mode = document.getElementById('backupMode')?.value || 'selected';
+            const list = document.getElementById('profileCheckboxes');
+            const summary = document.getElementById('backupSelectionSummary');
+            if (!list || !summary) return;
+
+            const checkboxes = Array.from(list.querySelectorAll('input[type="checkbox"]'));
+            const selectedCount = checkboxes.filter(cb => cb.checked).length;
+            const allEnabledCount = profiles.filter(profile => profile.enabled).length;
+            const useAll = mode === 'all-enabled';
+
+            list.classList.toggle('disabled', useAll);
+            checkboxes.forEach(cb => {
+                cb.disabled = useAll;
+            });
+
+            summary.textContent = useAll
+                ? `${allEnabledCount} enabled profiles`
+                : `${selectedCount} selected`;
+        }
+
+        async function loadConfigBackupPublicKey() {
+            const field = document.getElementById('sshPublicKey');
+            field.value = '';
+            try {
+                const res = await fetch(`${API}/api/config-backup/public-key`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const data = await res.json();
+                field.value = data.success ? data.public_key : '';
+                field.placeholder = data.success ? '' : (data.error || 'Public key is not configured');
+            } catch (e) {
+                field.placeholder = 'Public key is not configured';
+            }
+        }
+
+        function toggleSshAuthFields() {
+            const method = document.getElementById('sshAuthMethod').value;
+            document.getElementById('sshPasswordGroup').style.display = method === 'password' ? 'block' : 'none';
+            document.getElementById('sshPublicKeyGroup').style.display = method === 'key' ? 'block' : 'none';
+            if (method === 'key') {
+                loadConfigBackupPublicKey();
+            }
+        }
+
+        function escapeHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function normalizePathConfigs(profile) {
+            if (Array.isArray(profile.path_configs) && profile.path_configs.length > 0) {
+                return profile.path_configs.map(item => ({
+                    path: item.path || '',
+                    exclude_patterns: Array.isArray(item.exclude_patterns) ? item.exclude_patterns : []
+                }));
+            }
+
+            const globalExcludes = Array.isArray(profile.exclude_patterns) ? profile.exclude_patterns : [];
+            const paths = Array.isArray(profile.paths) && profile.paths.length > 0 ? profile.paths : [''];
+            return paths.map(path => ({
+                path,
+                exclude_patterns: globalExcludes
+            }));
+        }
+
+        function renderSshPaths(pathConfigs = [{ path: '', exclude_patterns: [] }]) {
+            const list = document.getElementById('sshPathList');
+            const configs = pathConfigs.length > 0 ? pathConfigs : [{ path: '', exclude_patterns: [] }];
+            list.innerHTML = configs.map((config, index) => {
+                const excludes = Array.isArray(config.exclude_patterns) ? config.exclude_patterns.join('\n') : '';
+                return `
+                    <div class="ssh-path-item" data-index="${index}">
+                        <div class="ssh-path-item-header">
+                            <span class="ssh-path-item-title">Path ${index + 1}</span>
+                            <button type="button" class="btn btn-sm btn-outline btn-danger ssh-remove-path" ${configs.length === 1 ? 'disabled' : ''}>Remove</button>
+                        </div>
+                        <div class="ssh-path-grid">
+                            <div class="form-group">
+                                <label>Absolute Path</label>
+                                <input type="text" class="ssh-path-value" value="${escapeHtml(config.path)}" placeholder="/etc" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Exclude Patterns</label>
+                                <textarea class="ssh-path-excludes" rows="3" placeholder="*.log&#10;*.tmp&#10;cache/">${escapeHtml(excludes)}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function addSshPath(config = { path: '', exclude_patterns: [] }) {
+            const current = collectSshPathConfigs(false);
+            current.push(config);
+            renderSshPaths(current);
+        }
+
+        function collectSshPathConfigs(validate = true) {
+            const items = Array.from(document.querySelectorAll('#sshPathList .ssh-path-item'));
+            const configs = items.map(item => {
+                const path = item.querySelector('.ssh-path-value').value.trim();
+                const excludes = item.querySelector('.ssh-path-excludes').value
+                    .split('\n')
+                    .map(pattern => pattern.trim())
+                    .filter(Boolean);
+                return { path, exclude_patterns: excludes };
+            });
+
+            if (!validate) {
+                return configs.length ? configs : [{ path: '', exclude_patterns: [] }];
+            }
+
+            if (configs.length === 0 || !configs.some(config => config.path)) {
+                showToast('At least one backup path is required', 'error');
+                return null;
+            }
+
+            for (const config of configs) {
+                if (!config.path) {
+                    showToast('All backup path rows must have an absolute path', 'error');
+                    return null;
+                }
+                if (!config.path.startsWith('/')) {
+                    showToast(`Backup path must be absolute: ${config.path}`, 'error');
+                    return null;
+                }
+            }
+
+            return configs;
+        }
+
+        function refreshSshPathControls() {
+            const configs = collectSshPathConfigs(false);
+            renderSshPaths(configs);
+        }
+
+        // Load status
+        async function loadStatus() {
+            try {
+                const res = await fetch(`${API}/api/status`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const data = await res.json();
+
+                document.getElementById('diskUsed').textContent = data.disk.used;
+                document.getElementById('diskAvail').textContent = data.disk.available;
+                document.getElementById('diskPercent').textContent = `of ${data.disk.total} used`;
+
+                const pct = parseInt(data.disk.percent) || 0;
+                const bar = document.getElementById('diskBar');
+                bar.style.width = pct + '%';
+                bar.className = 'disk-bar-fill ' + (pct > 90 ? 'disk-danger' : pct > 70 ? 'disk-warn' : 'disk-ok');
+
+                const badge = document.getElementById('statusBadge');
+                badge.textContent = 'System Healthy';
+                badge.className = 'status-badge status-healthy';
+            } catch (e) {
+                const badge = document.getElementById('statusBadge');
+                badge.textContent = 'Connection Error';
+                badge.className = 'status-badge status-error';
+            }
+        }
+
+        // Load profiles
+        async function loadProfiles() {
+            try {
+                const res = await fetch(`${API}/api/profiles`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const data = await res.json();
+                
+                profiles = data.profiles;
+                document.getElementById('profileCount').textContent = profiles.length;
+                
+                const tbody = document.getElementById('profilesTableBody');
+                if (profiles.length > 0) {
+                    tbody.innerHTML = profiles.map(p => `
+                        <tr>
+                            <td>${escapeHtml(p.name || 'Unnamed')}</td>
+                            <td><span class="profile-type ${typeClass(p.type)}">${typeLabel(p.type)}</span></td>
+                            <td>${escapeHtml(repositoryName(p.repository_id))}</td>
+                            <td>${p.max_backups > 0 ? escapeHtml(p.max_backups) : 'Global'}</td>
+                            <td>${escapeHtml(p.schedule || 'Not set')}</td>
+                            <td><span class="profile-status ${statusClass(p.enabled)}">${statusText(p.enabled)}</span></td>
+                            <td>
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-outline" onclick="editProfile('${p.id}')">Edit</button>
+                                    <button class="btn btn-sm btn-outline btn-danger" onclick="deleteProfile('${p.id}')">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><h3>No profiles configured</h3><p>Click "New Profile" to create your first backup profile</p></td></tr>';
+                }
+                
+                // Update backup modal checkboxes
+                loadProfileCheckboxes();
+            } catch (e) {
+                document.getElementById('profilesTableBody').innerHTML = '<tr><td colspan="7" class="empty-state"><h3>Error loading profiles</h3></td></tr>';
+            }
+        }
+
+        async function loadRepositories() {
+            try {
+                const res = await fetch(`${API}/api/restic-repositories`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const data = await res.json();
+                repositories = data.success ? (data.repositories || []) : [];
+                renderRepositories();
+                populateRepositorySelect();
+            } catch (e) {
+                repositories = [];
+                document.getElementById('repositoriesTableBody').innerHTML =
+                    '<tr><td colspan="4" class="empty-state"><h3>Error loading repositories</h3></td></tr>';
+                populateRepositorySelect();
+            }
+        }
+
+        function populateRepositorySelect(selectedId = null) {
+            const sel = document.getElementById('profileRepository');
+            if (!sel) return;
+            const current = selectedId || sel.value || 'default';
+            const source = repositories.length ? repositories : [{
+                id: 'default',
+                name: 'Default Local Repository',
+                type: 'local',
+                repository: '/var/backups/restic-repo'
+            }];
+            sel.innerHTML = source.map(repo =>
+                `<option value="${escapeHtml(repo.id)}">${escapeHtml(repo.name)} (${repositoryTypeLabel(repo.type)})</option>`
+            ).join('');
+            sel.value = source.some(repo => repo.id === current) ? current : (source[0]?.id || 'default');
+        }
+
+        function renderRepositories() {
+            const tbody = document.getElementById('repositoriesTableBody');
+            if (!tbody) return;
+            if (!repositories.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-state"><h3>No repositories configured</h3></td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = repositories.map(repo => `
+                <tr>
+                    <td>${escapeHtml(repo.name || 'Unnamed')}</td>
+                    <td><span class="profile-type ${repo.type === 'local' ? 'type-postgresql' : 'type-ssh-files'}">${repositoryTypeLabel(repo.type)}</span></td>
+                    <td class="repo-path" title="${escapeHtml(repo.repository || '')}">${escapeHtml(repo.repository || '-')}</td>
+                    <td>
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline" onclick="checkRepository('${repo.id}')">Check</button>
+                            <button class="btn btn-sm btn-outline" onclick="initRepository('${repo.id}')">Init</button>
+                            <button class="btn btn-sm btn-outline" onclick="editRepository('${repo.id}')">Edit</button>
+                            <button class="btn btn-sm btn-outline btn-danger" onclick="deleteRepository('${repo.id}')" ${repo.id === 'default' ? 'disabled' : ''}>Delete</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function splitResticS3Repository(value) {
+            const raw = String(value || '').trim();
+            if (!raw.startsWith('s3:')) return null;
+            const rest = raw.slice(3);
+            if (!rest) return null;
+
+            try {
+                if (rest.startsWith('http://') || rest.startsWith('https://')) {
+                    const parsed = new URL(rest);
+                    return {
+                        endpoint: parsed.origin,
+                        bucketPath: parsed.pathname.replace(/^\/+/, '')
+                    };
+                }
+            } catch (e) {
+                return null;
+            }
+
+            const slash = rest.indexOf('/');
+            if (slash === -1) {
+                return { endpoint: rest, bucketPath: '' };
+            }
+            return {
+                endpoint: rest.slice(0, slash),
+                bucketPath: rest.slice(slash + 1)
+            };
+        }
+
+        function buildResticS3RepositoryPath() {
+            const type = document.getElementById('repositoryType').value;
+            if (type !== 's3' && type !== 'minio') return;
+            const endpoint = document.getElementById('repositoryEndpoint').value.trim().replace(/\/+$/, '');
+            const bucketPath = document.getElementById('repositoryBucketPath').value.trim().replace(/^\/+/, '');
+            if (!endpoint || !bucketPath) return;
+            document.getElementById('repositoryPath').value = `s3:${endpoint}/${bucketPath}`;
+        }
+
+        function updateRepositoryTypeFields() {
+            const type = document.getElementById('repositoryType').value;
+            const remote = type === 's3' || type === 'minio';
+            document.querySelectorAll('.repo-remote-field').forEach(field => {
+                field.style.display = remote ? 'block' : 'none';
+            });
+
+            const path = document.getElementById('repositoryPath');
+            const hint = document.getElementById('repositoryPathHint');
+            if (type === 'local') {
+                path.placeholder = '/var/backups/restic-repo';
+                hint.textContent = 'Local filesystem path for the Restic repository.';
+            } else if (type === 'minio') {
+                path.placeholder = 's3:http://minio:9000/bucket/path';
+                hint.textContent = 'Generated from endpoint + bucket/prefix. You can also edit it manually.';
+            } else {
+                path.placeholder = 's3:https://s3.example.com/bucket/path';
+                hint.textContent = 'Generated from endpoint + bucket/prefix. Works with AWS and S3-compatible providers.';
+            }
+        }
+
+        function addRepository() {
+            clearRepositoryForm();
+            document.getElementById('repositoryModalTitle').textContent = 'Add Repository';
+            document.getElementById('repositoryModal').style.display = 'flex';
+            document.getElementById('repositoryName').focus();
+        }
+
+        function editRepository(id) {
+            const repo = repositories.find(item => item.id === id);
+            if (!repo) return;
+            document.getElementById('repositoryId').value = repo.id;
+            document.getElementById('repositoryName').value = repo.name || '';
+            document.getElementById('repositoryType').value = repo.type || 'local';
+            document.getElementById('repositoryPath').value = repo.repository || '';
+            const parsed = splitResticS3Repository(repo.repository || '');
+            document.getElementById('repositoryEndpoint').value = parsed ? parsed.endpoint : '';
+            document.getElementById('repositoryBucketPath').value = parsed ? parsed.bucketPath : '';
+            document.getElementById('repositoryPassword').value = '';
+            document.getElementById('repositoryRegion').value = repo.aws_default_region || '';
+            document.getElementById('repositoryAccessKey').value = '';
+            document.getElementById('repositorySecretKey').value = '';
+            updateRepositoryTypeFields();
+            document.getElementById('repositoryModalTitle').textContent = 'Edit Repository';
+            document.getElementById('repositoryModal').style.display = 'flex';
+        }
+
+        function clearRepositoryForm() {
+            document.getElementById('repositoryId').value = '';
+            document.getElementById('repositoryForm').reset();
+            document.getElementById('repositoryType').value = 'local';
+            updateRepositoryTypeFields();
+        }
+
+        function cancelRepository() {
+            document.getElementById('repositoryModal').style.display = 'none';
+            clearRepositoryForm();
+        }
+
+        async function saveRepository() {
+            const repoId = document.getElementById('repositoryId').value;
+            const isEdit = !!repoId;
+            const data = {
+                name: document.getElementById('repositoryName').value.trim(),
+                type: document.getElementById('repositoryType').value,
+                repository: document.getElementById('repositoryPath').value.trim(),
+                password: document.getElementById('repositoryPassword').value,
+                aws_default_region: document.getElementById('repositoryRegion').value.trim(),
+                aws_access_key_id: document.getElementById('repositoryAccessKey').value,
+                aws_secret_access_key: document.getElementById('repositorySecretKey').value
+            };
+
+            if (!data.name) { showToast('Repository name is required', 'error'); return; }
+            buildResticS3RepositoryPath();
+            data.repository = document.getElementById('repositoryPath').value.trim();
+            if (!data.repository) { showToast('Restic repository path is required', 'error'); return; }
+            if (!isEdit && !data.password) { showToast('Restic password is required', 'error'); return; }
+
+            if (data.type === 'local') {
+                data.aws_default_region = '';
+                data.aws_access_key_id = null;
+                data.aws_secret_access_key = null;
+            }
+
+            try {
+                const res = await fetch(`${API}/api/restic-repositories${isEdit ? '/' + repoId : ''}`, {
+                    method: isEdit ? 'PUT' : 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                if (!result.success) {
+                    showToast(`Error: ${result.error}`, 'error');
+                    return;
+                }
+                showToast(isEdit ? 'Repository updated successfully' : 'Repository created successfully', 'success');
+                document.getElementById('repositoryModal').style.display = 'none';
+                await loadRepositories();
+            } catch (e) {
+                showToast('Failed to save repository', 'error');
+            }
+        }
+
+        async function checkRepository(id) {
+            showToast('Checking repository...', 'info');
+            try {
+                const res = await fetch(`${API}/api/restic-repositories/${id}/check`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const data = await res.json();
+                showToast(data.success ? data.message : `Error: ${data.error}`, data.success ? 'success' : 'error');
+            } catch (e) {
+                showToast('Repository check failed', 'error');
+            }
+        }
+
+        async function initRepository(id) {
+            if (!confirm('Initialize this Restic repository if needed?')) return;
+            showToast('Initializing repository...', 'info');
+            try {
+                const res = await fetch(`${API}/api/restic-repositories/${id}/init`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const data = await res.json();
+                showToast(data.success ? data.message : `Error: ${data.error}`, data.success ? 'success' : 'error');
+            } catch (e) {
+                showToast('Repository init failed', 'error');
+            }
+        }
+
+        async function deleteRepository(id) {
+            if (!confirm('Delete this repository definition? Restic snapshots are not removed.')) return;
+            try {
+                const res = await fetch(`${API}/api/restic-repositories/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    showToast(`Error: ${data.error}`, 'error');
+                    return;
+                }
+                showToast('Repository deleted successfully', 'success');
+                await loadRepositories();
+                await loadProfiles();
+            } catch (e) {
+                showToast('Failed to delete repository', 'error');
+            }
+        }
+
+        // Load backups (from restic snapshots) — fetch all, then render the
+        // current page through the active filters.
+        async function loadBackups() {
+            try {
+                const res = await fetch(`${API}/api/snapshots?active_profiles_only=1&respect_retention=1&_=${Date.now()}`, {
+                    cache: 'no-store',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+                const data = await res.json();
+
+                if (data.success && data.snapshots.length > 0) {
+                    // Newest first
+                    backupsAll = data.snapshots.slice().sort((a, b) => new Date(b.time) - new Date(a.time));
+                    document.getElementById('backupCount').textContent = data.snapshots.length;
+                    populateRepositoryFilter();
+                    populateProfileFilter();
+                    renderBackups();
+                } else {
+                    backupsAll = [];
+                    document.getElementById('backupCount').textContent = '0';
+                    populateRepositoryFilter();
+                    populateProfileFilter();
+                    document.getElementById('backupsTableBody').innerHTML = '<tr><td colspan="5" class="empty-state"><h3>No backups yet</h3><p>Run a backup to get started</p></td></tr>';
+                    document.getElementById('backupPageInfo').textContent = '-';
+                }
+            } catch (e) {
+                document.getElementById('backupsTableBody').innerHTML = '<tr><td colspan="5" class="empty-state"><h3>Error loading backups</h3></td></tr>';
+            }
+        }
+
+        function snapRepositoryId(snap) {
+            return snap.repository_id || 'default';
+        }
+
+        function snapRepositoryName(snap) {
+            return snap.repository_name || repositoryName(snapRepositoryId(snap));
+        }
+
+        function populateRepositoryFilter() {
+            const sel = document.getElementById('filterRepository');
+            const current = sel.value;
+            const repoItems = [...new Map(backupsAll.map(snap => [
+                snapRepositoryId(snap),
+                snapRepositoryName(snap)
+            ])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+            sel.innerHTML = '<option value="">All repositories</option>' +
+                repoItems.map(([id, name]) => `<option value="${escapeHtml(id)}">${escapeHtml(name)}</option>`).join('');
+            if (repoItems.some(([id]) => id === current)) sel.value = current;
+        }
+
+        // Fill the profile filter dropdown from the profile names present in snapshots.
+        function populateProfileFilter() {
+            const sel = document.getElementById('filterProfile');
+            const current = sel.value;
+            const names = [...new Set(backupsAll.map(snapProfileName))].sort();
+            sel.innerHTML = '<option value="">All profiles</option>' +
+                names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+            // Preserve the selection if it still exists
+            if (names.includes(current)) sel.value = current;
+        }
+
+        // Apply filters + pagination and paint the table.
+        function renderBackups() {
+            const repositoryFilter = document.getElementById('filterRepository').value;
+            const profileFilter = document.getElementById('filterProfile').value;
+            const typeFilter = document.getElementById('filterType').value;
+
+            const filtered = backupsAll.filter(snap => {
+                if (repositoryFilter && snapRepositoryId(snap) !== repositoryFilter) return false;
+                if (profileFilter && snapProfileName(snap) !== profileFilter) return false;
+                if (typeFilter && snapType(snap) !== typeFilter) return false;
+                return true;
+            });
+
+            const totalPages = Math.max(1, Math.ceil(filtered.length / backupPageSize));
+            if (backupPage > totalPages) backupPage = totalPages;
+            const start = (backupPage - 1) * backupPageSize;
+            const pageItems = filtered.slice(start, start + backupPageSize);
+
+            const tbody = document.getElementById('backupsTableBody');
+            if (pageItems.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><h3>No matching backups</h3></td></tr>';
+            } else {
+                tbody.innerHTML = pageItems.map(snap => {
+                    const formattedTime = new Date(snap.time).toLocaleString();
+                    return `
+                        <tr>
+                            <td>${formattedTime}</td>
+                            <td>${escapeHtml(snapProfileName(snap))}</td>
+                            <td>${escapeHtml(snapRepositoryName(snap))}</td>
+                            <td class="backup-size">${formatBytes(snap.size || 0)}</td>
+                            <td>
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-outline" onclick="downloadBackup('${shortId(snap.id)}')">Download</button>
+                                    <button class="btn btn-sm btn-outline btn-danger" onclick="deleteBackup('${shortId(snap.id)}')">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            document.getElementById('backupPageInfo').textContent =
+                filtered.length ? `Page ${backupPage} of ${totalPages} · ${filtered.length} backups` : '0 backups';
+            document.getElementById('backupPrev').disabled = backupPage <= 1;
+            document.getElementById('backupNext').disabled = backupPage >= totalPages;
+        }
+
+        // Format bytes
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Load logs
+        // NOTE: the dashboard has no log panel element; logs are available via
+        // GET /api/logs for future use but are not rendered here.
+
+        // Load backup status
+        async function loadBackupStatus() {
+            let stillRunning = false;
+            try {
+                const res = await fetch(`${API}/api/backup-status`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const data = await res.json();
+                stillRunning = !!data.running;
+                if (stillRunning) {
+                    backupSeenRunning = true;
+                }
+
+                const banner = document.getElementById('backupBanner');
+                const text = document.getElementById('backupBannerText');
+                if (stillRunning) {
+                    const mode = data.mode || 'backup';
+                    const started = data.started_at ? formatDate(data.started_at) : '';
+                    text.textContent = `Backup running: ${mode}${started ? ' (started ' + started + ')' : ''}`;
+                    banner.classList.add('active');
+                } else {
+                    banner.classList.remove('active');
+                }
+            } catch (e) {
+                document.getElementById('backupBanner').classList.remove('active');
+            }
+
+            // If a backup just finished, refresh snapshots and stats. Manual
+            // backup startup can report idle for a few seconds before the
+            // background script grabs the lock, so keep fast-polling until the
+            // job has actually been observed running or enough time has passed.
+            const waitedLongEnough = backupStartPollAt && (Date.now() - backupStartPollAt > 15000);
+            const finishedObservedRun = backupRunning && !stillRunning;
+            const pendingRefreshReady = backupPendingRefresh && !stillRunning && (backupSeenRunning || waitedLongEnough);
+            if (finishedObservedRun || pendingRefreshReady) {
+                await loadBackups();
+                await loadStatus();
+                backupPendingRefresh = false;
+                backupSeenRunning = false;
+                backupStartPollAt = 0;
+            }
+            backupRunning = stillRunning;
+
+            // Update button states
+            if (!isModalOpen()) {
+                const isRunning = stillRunning;
+                document.querySelectorAll('.btn:not(.btn-close):not(.btn-logout)').forEach(btn => {
+                    btn.disabled = isRunning;
+                    btn.classList.toggle('disabled', isRunning);
+                });
+            }
+
+            // Stop fast-polling once backup is done
+            if (!stillRunning && fastPollHandle && !backupPendingRefresh) {
+                clearInterval(fastPollHandle);
+                fastPollHandle = null;
+            }
+        }
+
+        // Add profile
+        async function addProfile() {
+            clearProfileForm();
+            populateRepositorySelect('default');
+            document.getElementById('modalTitle').textContent = 'Add New Profile';
+            document.getElementById('profileModal').style.display = 'flex';
+            document.getElementById('profileName').focus();
+        }
+
+        // Edit profile
+        function editProfile(id) {
+            const profile = profiles.find(p => p.id === id);
+            if (!profile) return;
+            
+            document.getElementById('profileId').value = profile.id;
+            document.getElementById('profileName').value = profile.name || '';
+            document.getElementById('profileType').value = profile.type;
+            document.getElementById('profileDescription').value = profile.description || '';
+            document.getElementById('profileEnabled').checked = profile.enabled !== false;
+            document.getElementById('profileSchedule').value = profile.schedule || '';
+            document.getElementById('profileMaxBackups').value = profile.max_backups || 0;
+            populateRepositorySelect(profile.repository_id || 'default');
+            
+            // Show/hide type-specific fields
+            toggleTypeFields(profile.type);
+            
+            // Fill type-specific fields
+            if (profile.type === 'postgresql') {
+                document.getElementById('pgHost').value = profile.host || '';
+                document.getElementById('pgPort').value = profile.port || 5432;
+                document.getElementById('pgUsername').value = profile.username || '';
+                document.getElementById('pgPassword').value = profile.password || '';
+                document.getElementById('pgDatabases').value = (profile.databases || []).join(',');
+            } else if (profile.type === 'mongodb') {
+                document.getElementById('mongoHost').value = profile.host || '';
+                document.getElementById('mongoPort').value = profile.port || 27017;
+                document.getElementById('mongoUsername').value = profile.username || '';
+                document.getElementById('mongoPassword').value = profile.password || '';
+                document.getElementById('mongoDatabases').value = (profile.databases || []).join(',');
+            } else if (profile.type === 'redis') {
+                document.getElementById('redisHost').value = profile.host || '';
+                document.getElementById('redisPort').value = profile.port || 6379;
+                document.getElementById('redisPassword').value = profile.password || '';
+            } else if (profile.type === 'ssh_files') {
+                document.getElementById('sshHost').value = profile.ssh_host || '';
+                document.getElementById('sshPort').value = profile.ssh_port || 22;
+                document.getElementById('sshUsername').value = profile.ssh_user || '';
+                document.getElementById('sshAuthMethod').value = profile.auth_method || (profile.ssh_password ? 'password' : 'key');
+                document.getElementById('sshPassword').value = profile.ssh_password || '';
+                renderSshPaths(normalizePathConfigs(profile));
+                document.getElementById('sshPreserveMetadata').checked = !!profile.preserve_metadata;
+                document.getElementById('sshLogRsyncOutput').checked = !!profile.log_rsync_output;
+                toggleSshAuthFields();
+            }
+            
+            document.getElementById('modalTitle').textContent = 'Edit Profile';
+            document.getElementById('profileModal').style.display = 'flex';
+        }
+
+        // Delete profile
+        async function deleteProfile(id) {
+            if (!confirm('Delete this profile? Existing restic snapshots will be preserved.')) return;
+            
+            try {
+                const res = await fetch(`${API}/api/profiles/${id}`, {
+                    method: 'DELETE',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    }
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('Profile deleted successfully', 'success');
+                    loadProfiles();
+                } else {
+                    showToast(`Error: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                showToast('Failed to delete profile', 'error');
+            }
+        }
+
+        // Save profile
+        async function saveProfile() {
+            const profileId = document.getElementById('profileId').value;
+            const isEdit = !!profileId;
+            
+            // Get form values
+            const profileData = {
+                name: document.getElementById('profileName').value.trim(),
+                type: document.getElementById('profileType').value,
+                description: document.getElementById('profileDescription').value.trim(),
+                enabled: document.getElementById('profileEnabled').checked,
+                schedule: document.getElementById('profileSchedule').value.trim(),
+                max_backups: parseInt(document.getElementById('profileMaxBackups').value, 10) || 0,
+                repository_id: document.getElementById('profileRepository').value || 'default'
+            };
+            
+            // Validate required fields
+            if (!profileData.name) {
+                showToast('Profile name is required', 'error');
+                return;
+            }
+            if (!profileData.type) {
+                showToast('Profile type is required', 'error');
+                return;
+            }
+            if (!profileData.schedule) {
+                showToast('Schedule is required', 'error');
+                return;
+            }
+            if (profileData.max_backups < 0) {
+                showToast('Backups to keep cannot be negative', 'error');
+                return;
+            }
+            
+            // Add type-specific fields
+            const type = profileData.type;
+            if (type === 'postgresql') {
+                const host = document.getElementById('pgHost').value.trim();
+                const port = parseInt(document.getElementById('pgPort').value) || 5432;
+                const username = document.getElementById('pgUsername').value.trim();
+                const password = document.getElementById('pgPassword').value;
+                const databasesInput = document.getElementById('pgDatabases').value.trim();
+
+                if (!host) { showToast('PostgreSQL host is required', 'error'); return; }
+                if (!username) { showToast('PostgreSQL username is required', 'error'); return; }
+
+                profileData.host = host;
+                profileData.port = port;
+                profileData.username = username;
+                profileData.password = password;
+                profileData.databases = databasesInput ? databasesInput.split(',').map(d => d.trim()).filter(d => d) : ['all'];
+            } else if (type === 'mongodb') {
+                const host = document.getElementById('mongoHost').value.trim();
+                const port = parseInt(document.getElementById('mongoPort').value) || 27017;
+                const username = document.getElementById('mongoUsername').value.trim();
+                const password = document.getElementById('mongoPassword').value;
+                const databasesInput = document.getElementById('mongoDatabases').value.trim();
+
+                if (!host) { showToast('MongoDB host is required', 'error'); return; }
+
+                profileData.host = host;
+                profileData.port = port;
+                profileData.username = username;
+                profileData.password = password;
+                profileData.databases = databasesInput ? databasesInput.split(',').map(d => d.trim()).filter(d => d) : ['all'];
+            } else if (type === 'redis') {
+                const host = document.getElementById('redisHost').value.trim();
+                const port = parseInt(document.getElementById('redisPort').value) || 6379;
+                const password = document.getElementById('redisPassword').value;
+
+                if (!host) { showToast('Redis host is required', 'error'); return; }
+
+                profileData.host = host;
+                profileData.port = port;
+                profileData.password = password;
+            } else if (type === 'ssh_files') {
+                const host = document.getElementById('sshHost').value.trim();
+                const port = parseInt(document.getElementById('sshPort').value) || 22;
+                const username = document.getElementById('sshUsername').value.trim();
+                const authMethod = document.getElementById('sshAuthMethod').value;
+                const password = document.getElementById('sshPassword').value;
+                const pathConfigs = collectSshPathConfigs(true);
+
+                if (!host) { showToast('SSH host is required', 'error'); return; }
+                if (!username) { showToast('SSH username is required', 'error'); return; }
+                if (authMethod === 'password' && !password && !isEdit) { showToast('SSH password is required', 'error'); return; }
+                if (!pathConfigs) { return; }
+
+                profileData.ssh_host = host;
+                profileData.ssh_port = port;
+                profileData.ssh_user = username;
+                profileData.auth_method = authMethod;
+                if (authMethod === 'password') {
+                    profileData.ssh_password = password;
+                } else {
+                    profileData.ssh_password = null;
+                }
+                profileData.path_configs = pathConfigs;
+                profileData.paths = pathConfigs.map(config => config.path);
+                profileData.exclude_patterns = [];
+                profileData.preserve_metadata = document.getElementById('sshPreserveMetadata').checked;
+                profileData.log_rsync_output = document.getElementById('sshLogRsyncOutput').checked;
+            }
+            
+            try {
+                let res;
+                if (isEdit) {
+                    res = await fetch(`${API}/api/profiles/${profileId}`, {
+                        method: 'PUT',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${getAuthToken()}`
+                        },
+                        body: JSON.stringify(profileData)
+                    });
+                } else {
+                    res = await fetch(`${API}/api/profiles`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${getAuthToken()}`
+                        },
+                        body: JSON.stringify(profileData)
+                    });
+                }
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast(isEdit ? 'Profile updated successfully' : 'Profile created successfully', 'success');
+                    document.getElementById('profileModal').style.display = 'none';
+                    loadProfiles();
+                } else {
+                    showToast(`Error: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                showToast('Failed to save profile', 'error');
+            }
+        }
+
+        // Cancel profile edit/add
+        function cancelProfile() {
+            document.getElementById('profileModal').style.display = 'none';
+            clearProfileForm();
+        }
+
+        // Clear profile form
+        function clearProfileForm() {
+            document.getElementById('profileId').value = '';
+            document.getElementById('profileForm').reset();
+            document.getElementById('profileType').value = '';
+            document.getElementById('profileMaxBackups').value = 0;
+            populateRepositorySelect('default');
+            renderSshPaths();
+            hideAllTypeFields();
+        }
+
+        // Toggle type-specific fields
+        function toggleTypeFields(type) {
+            hideAllTypeFields();
+            if (type === 'postgresql') {
+                document.getElementById('postgresqlFields').style.display = 'block';
+            } else if (type === 'mongodb') {
+                document.getElementById('mongodbFields').style.display = 'block';
+            } else if (type === 'redis') {
+                document.getElementById('redisFields').style.display = 'block';
+            } else if (type === 'ssh_files') {
+                document.getElementById('sshFields').style.display = 'block';
+                if (!document.querySelector('#sshPathList .ssh-path-item')) {
+                    renderSshPaths();
+                }
+                toggleSshAuthFields();
+            }
+        }
+
+        function hideAllTypeFields() {
+            document.getElementById('postgresqlFields').style.display = 'none';
+            document.getElementById('mongodbFields').style.display = 'none';
+            document.getElementById('redisFields').style.display = 'none';
+            document.getElementById('sshFields').style.display = 'none';
+        }
+
+        // Backup now
+        function backupNow() {
+            document.getElementById('backupMode').value = 'selected';
+            document.getElementById('backupModal').style.display = 'flex';
+            loadProfileCheckboxes();
+        }
+
+        // Cancel backup
+        function cancelBackup() {
+            document.getElementById('backupModal').style.display = 'none';
+        }
+
+        // Start backup
+        async function startBackup() {
+            const form = document.getElementById('backupForm');
+            const mode = document.getElementById('backupMode').value;
+            const checkboxes = document.querySelectorAll('#profileCheckboxes input[type="checkbox"]:checked');
+            const selectedIds = Array.from(checkboxes).map(cb => cb.value);
+            
+            if (mode === 'selected' && selectedIds.length === 0) {
+                showToast('Please select at least one profile to backup', 'error');
+                return;
+            }
+            
+            if (!confirm(`Start backup for ${mode === 'selected' ? selectedIds.length : 'all enabled'} profiles?`)) {
+                return;
+            }
+            
+            try {
+                const res = await fetch(`${API}/api/backup`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify({
+                        mode: 'profile',
+                        profile_ids: mode === 'all-enabled' ? [] : selectedIds
+                    })
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('Backup started successfully', 'success');
+                    document.getElementById('backupModal').style.display = 'none';
+                    
+                    // Set flags for immediate feedback
+                    backupRunning = true;
+                    backupPendingRefresh = true;
+                    backupSeenRunning = false;
+                    backupStartPollAt = Date.now();
+                    loadBackupStatus(); // Show banner immediately
+                    
+                    // Start fast polling to detect when backup completes
+                    if (!fastPollHandle) {
+                        fastPollHandle = setInterval(loadBackupStatus, 3000);
+                    }
+                } else {
+                    showToast(`Error: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                showToast('Failed to start backup', 'error');
+            }
+        }
+
+        // Download backup (restore -> tar.gz streamed by the backend).
+        // Uses fetch+blob because a plain <a href> can't send the auth header.
+        async function downloadBackup(id) {
+            showToast('Preparing download… restoring the snapshot may take a while', 'info');
+            try {
+                const res = await fetch(`${API}/api/backup/${id}/download`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                if (!res.ok) {
+                    let msg = `HTTP ${res.status}`;
+                    try { const e = await res.json(); msg = e.error || msg; } catch (_) {}
+                    showToast(`Download failed: ${msg}`, 'error');
+                    return;
+                }
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `backup_${id}.restic.tar.gz`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                showToast('Download ready', 'success');
+            } catch (e) {
+                showToast('Download failed', 'error');
+            }
+        }
+
+        // Delete backup
+        async function deleteBackup(id) {
+            if (!confirm('Are you sure you want to delete this backup?')) return;
+            
+            try {
+                const res = await fetch(`${API}/api/backup/${id}`, {
+                    method: 'DELETE',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    }
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    showToast('Backup deleted successfully', 'success');
+                    loadBackups();
+                } else {
+                    showToast(`Error: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                showToast('Failed to delete backup', 'error');
+            }
+        }
+
+        // Initialize app
+        async function initApp() {
+            // Check for existing token
+            const token = getAuthToken();
+            if (token) {
+                try {
+                    // Validate token
+                    const res = await fetch(`${API}/api/validate-token`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    
+                    if (res.ok) {
+                        showApp();
+                        loadAllData();
+                        return;
+                    }
+                } catch (e) {
+                    // Token invalid, fall through to login
+                }
+            }
+            
+            // Show login screen
+            showLogin();
+        }
+
+        function showLogin() {
+            document.getElementById('auth-container').style.display = 'block';
+            document.getElementById('login-screen').style.display = 'block';
+            document.getElementById('app-container').style.display = 'none';
+        }
+
+        function showApp() {
+            document.getElementById('auth-container').style.display = 'block';
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('app-container').style.display = 'block';
+        }
+
+        function isModalOpen() {
+            return ['profileModal', 'backupModal', 'repositoryModal'].some(id => {
+                const modal = document.getElementById(id);
+                return modal && modal.style.display === 'flex';
+            });
+        }
+
+        async function loadAllData() {
+            await loadRepositories();
+            await Promise.all([
+                loadStatus(),
+                loadProfiles(),
+                loadBackups()
+            ]);
+        }
+
+        // Handle form submissions
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            
+            document.getElementById('login-btn').disabled = true;
+            document.getElementById('login-btn').textContent = 'Signing in...';
+            
+            try {
+                const res = await login(username, password);
+                const data = await res.json();
+                
+                if (data.success) {
+                    setAuthToken(data.token);
+                    document.getElementById('username-display').textContent = data.user;
+                    showApp();
+                    loadAllData();
+                } else {
+                    document.getElementById('login-error').textContent = data.error || 'Login failed';
+                }
+            } catch (e) {
+                document.getElementById('login-error').textContent = 'Network error. Please try again.';
+            } finally {
+                document.getElementById('login-btn').disabled = false;
+                document.getElementById('login-btn').textContent = 'Sign In';
+            }
+        });
+
+        document.getElementById('logout-btn').addEventListener('click', async () => {
+            try {
+                await logout();
+            } catch (e) {
+                // Ignore logout errors
+            }
+            sessionStorage.removeItem('authToken');
+            authToken = null;
+            showLogin();
+        });
+
+        document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+
+        // Profile form events
+        document.getElementById('profileType').addEventListener('change', (e) => {
+            toggleTypeFields(e.target.value);
+        });
+        document.getElementById('sshAuthMethod').addEventListener('change', toggleSshAuthFields);
+        document.getElementById('addSshPathBtn').addEventListener('click', () => addSshPath());
+        document.getElementById('sshPathList').addEventListener('click', (e) => {
+            if (!e.target.classList.contains('ssh-remove-path')) return;
+            const item = e.target.closest('.ssh-path-item');
+            if (!item) return;
+            const configs = collectSshPathConfigs(false);
+            configs.splice(parseInt(item.dataset.index, 10), 1);
+            renderSshPaths(configs);
+        });
+
+        document.getElementById('profileForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            saveProfile();
+        });
+
+        document.getElementById('profileModalClose').addEventListener('click', cancelProfile);
+        document.getElementById('profileCancelBtn').addEventListener('click', cancelProfile);
+
+        // Repository form events
+        document.getElementById('repositoryType').addEventListener('change', updateRepositoryTypeFields);
+        document.getElementById('repositoryEndpoint').addEventListener('input', buildResticS3RepositoryPath);
+        document.getElementById('repositoryBucketPath').addEventListener('input', buildResticS3RepositoryPath);
+        document.getElementById('repositoryForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            saveRepository();
+        });
+        document.getElementById('repositoryModalClose').addEventListener('click', cancelRepository);
+        document.getElementById('repositoryCancelBtn').addEventListener('click', cancelRepository);
+
+        // Backup modal events
+        document.getElementById('backupModalClose').addEventListener('click', cancelBackup);
+        document.getElementById('backupCancelBtn').addEventListener('click', cancelBackup);
+        document.getElementById('backupMode').addEventListener('change', updateBackupSelectionState);
+        document.getElementById('profileCheckboxes').addEventListener('change', updateBackupSelectionState);
+        document.getElementById('backupForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            startBackup();
+        });
+
+        // Profile buttons
+        document.getElementById('addProfileBtn').addEventListener('click', addProfile);
+        document.getElementById('backupNowBtn').addEventListener('click', backupNow);
+        document.getElementById('addRepositoryBtn').addEventListener('click', addRepository);
+        document.getElementById('refreshBackupsBtn').addEventListener('click', () => {
+            backupPage = 1;
+            loadBackups();
+        });
+
+        // Recent-backups filters + pagination
+        document.getElementById('filterRepository').addEventListener('change', () => { backupPage = 1; renderBackups(); });
+        document.getElementById('filterProfile').addEventListener('change', () => { backupPage = 1; renderBackups(); });
+        document.getElementById('filterType').addEventListener('change', () => { backupPage = 1; renderBackups(); });
+        document.getElementById('backupPrev').addEventListener('click', () => { if (backupPage > 1) { backupPage--; renderBackups(); } });
+        document.getElementById('backupNext').addEventListener('click', () => { backupPage++; renderBackups(); });
+
+        // Global variables for polling
+        let fastPollHandle = null;
+
+        // Initial load
+        document.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            initApp();
+        });
+
+        // Auto refresh every 30s
+        setInterval(() => {
+            if (isAuthenticated() && !isModalOpen()) {
+                loadStatus();
+                loadProfiles();
+                loadBackupStatus();
+                loadBackups();
+            }
+        }, 30000);
+    </script>
+</body>
+</html>

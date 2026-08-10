@@ -1,0 +1,13 @@
+.git
+.github
+.idea
+.vscode
+.agents
+.codex
+configs/backup.env
+configs/.htpasswd
+data
+**/__pycache__
+**/*.pyc
+**/*.bak
+tests
