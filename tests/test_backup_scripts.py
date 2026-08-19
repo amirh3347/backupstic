@@ -12,6 +12,54 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class BackupScriptIntegrationTests(unittest.TestCase):
+    def test_monitor_handles_missing_backup_directories(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            runtime = Path(temp_dir)
+            fake_bin = runtime / 'bin'
+            fake_bin.mkdir()
+            self._executable(
+                fake_bin / 'restic',
+                '#!/bin/sh\n'
+                'case "$*" in\n'
+                '  "snapshots --json"|"snapshots --latest 1 --json") printf "[]\\n" ;;\n'
+                '  *) exit 0 ;;\n'
+                'esac\n',
+            )
+            self._executable(
+                fake_bin / 'jq',
+                '#!/bin/sh\n'
+                'case "$1" in\n'
+                '  length) printf "0\\n" ;;\n'
+                '  *) printf "null\\n" ;;\n'
+                'esac\n',
+            )
+
+            backup_base = runtime / 'backups'
+            (backup_base / 'restic-repo').mkdir(parents=True)
+            (backup_base / 'restic-repo' / 'config').touch()
+            env = os.environ.copy()
+            env.update({
+                'PATH': f"{fake_bin}:{env['PATH']}",
+                'BACKUP_BASE': str(backup_base),
+                'RESTIC_REPO': str(backup_base / 'restic-repo'),
+                'RESTIC_PASSWORD': 'r' * 48,
+            })
+
+            result = subprocess.run(
+                ['bash', 'scripts/monitor.sh'],
+                cwd=PROJECT_ROOT,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            for database in ('postgresql', 'redis', 'mongodb', 'elasticsearch'):
+                self.assertIn(f'WARNING: No {database} backups found', result.stdout)
+            self.assertIn('Monitoring check completed', result.stdout)
+            self.assertTrue(any((backup_base / 'reports').glob('report_*.txt')))
+
     def test_legacy_postgres_flow_uses_one_lock_and_scoped_storage(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             runtime = Path(temp_dir)

@@ -83,7 +83,13 @@ check_backup_freshness() {
     log "Checking backup freshness..."
 
     for db in postgresql redis mongodb elasticsearch; do
-        LATEST=$(find "$BACKUP_BASE/$db" -name "*.gz" -o -name "*.json" 2>/dev/null | head -1)
+        BACKUP_DIR="$BACKUP_BASE/$db"
+        if [ ! -d "$BACKUP_DIR" ]; then
+            log "WARNING: No $db backups found"
+            continue
+        fi
+
+        LATEST=$(find "$BACKUP_DIR" -type f \( -name "*.gz" -o -name "*.json" \) -print -quit 2>/dev/null)
         if [ -n "$LATEST" ]; then
             AGE=$(( ($(date +%s) - $(stat -c %Y "$LATEST")) / 86400 ))
             if [ "$AGE" -gt 2 ]; then
