@@ -74,6 +74,12 @@ fi
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/ssh_files}"
 mkdir -p "$BACKUP_DIR"
 
+SSH_HOST_KEY_CHECKING="${CONFIG_BACKUP_SSH_HOST_KEY_CHECKING:-accept-new}"
+case "$SSH_HOST_KEY_CHECKING" in
+    yes|accept-new|no) ;;
+    *) fail "CONFIG_BACKUP_SSH_HOST_KEY_CHECKING must be yes, accept-new, or no" ;;
+esac
+
 SAFE_PROFILE=$(sanitize_name "$PROFILE_NAME")
 [ -n "$SAFE_PROFILE" ] || SAFE_PROFILE="configuration_backup"
 WORK_DIR=$(mktemp -d "$BACKUP_DIR/job-${PROFILE_ID}-${DATE}.XXXXXX")
@@ -92,7 +98,7 @@ trap cleanup EXIT
 SSH_COMMON=(
     -p "$SSH_PORT"
     -o "ConnectTimeout=${CONFIG_BACKUP_SSH_CONNECT_TIMEOUT:-10}"
-    -o StrictHostKeyChecking=yes
+    -o "StrictHostKeyChecking=$SSH_HOST_KEY_CHECKING"
     -o "UserKnownHostsFile=${CONFIG_BACKUP_SSH_KNOWN_HOSTS:-/run/secrets/config-backup/known_hosts}"
     -o LogLevel=ERROR
 )
@@ -102,14 +108,14 @@ if [ "$AUTH_METHOD" = "key" ]; then
     [ -f "$SSH_PRIVATE_KEY" ] || fail "Configured private key not found: $SSH_PRIVATE_KEY"
     SSH_CMD=(ssh -i "$SSH_PRIVATE_KEY" -o BatchMode=yes "${SSH_COMMON[@]}" "$SSH_USER@$SSH_HOST")
     RSYNC_RUNNER=(rsync)
-    RSYNC_SSH="ssh -i $(remote_quote "$SSH_PRIVATE_KEY") -o BatchMode=yes -p $SSH_PORT -o ConnectTimeout=${CONFIG_BACKUP_SSH_CONNECT_TIMEOUT:-10} -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$(remote_quote "${CONFIG_BACKUP_SSH_KNOWN_HOSTS:-/run/secrets/config-backup/known_hosts}") -o LogLevel=ERROR"
+    RSYNC_SSH="ssh -i $(remote_quote "$SSH_PRIVATE_KEY") -o BatchMode=yes -p $SSH_PORT -o ConnectTimeout=${CONFIG_BACKUP_SSH_CONNECT_TIMEOUT:-10} -o StrictHostKeyChecking=$SSH_HOST_KEY_CHECKING -o UserKnownHostsFile=$(remote_quote "${CONFIG_BACKUP_SSH_KNOWN_HOSTS:-/run/secrets/config-backup/known_hosts}") -o LogLevel=ERROR"
 elif [ "$AUTH_METHOD" = "password" ]; then
     [ -n "$SSH_PASSWORD" ] || fail "SSH password is required for password authentication"
     command -v sshpass >/dev/null 2>&1 || fail "sshpass is required for password authentication but not installed"
     export SSHPASS="$SSH_PASSWORD"
     SSH_CMD=(sshpass -e ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no "${SSH_COMMON[@]}" "$SSH_USER@$SSH_HOST")
     RSYNC_RUNNER=(sshpass -e rsync)
-    RSYNC_SSH="ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no -p $SSH_PORT -o ConnectTimeout=${CONFIG_BACKUP_SSH_CONNECT_TIMEOUT:-10} -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$(remote_quote "${CONFIG_BACKUP_SSH_KNOWN_HOSTS:-/run/secrets/config-backup/known_hosts}") -o LogLevel=ERROR"
+    RSYNC_SSH="ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no -p $SSH_PORT -o ConnectTimeout=${CONFIG_BACKUP_SSH_CONNECT_TIMEOUT:-10} -o StrictHostKeyChecking=$SSH_HOST_KEY_CHECKING -o UserKnownHostsFile=$(remote_quote "${CONFIG_BACKUP_SSH_KNOWN_HOSTS:-/run/secrets/config-backup/known_hosts}") -o LogLevel=ERROR"
 else
     fail "Unsupported auth_method: $AUTH_METHOD"
 fi

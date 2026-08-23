@@ -40,6 +40,7 @@ if [ ! -f "$ENV_FILE" ]; then
         printf 'CONFIG_BACKUP_SSH_PUBLIC_KEY_FILE=/run/secrets/config-backup/id_ed25519.pub\n'
         printf 'CONFIG_BACKUP_SSH_KNOWN_HOSTS=/run/secrets/config-backup/known_hosts\n'
         printf 'CONFIG_BACKUP_SSH_CONNECT_TIMEOUT=10\n'
+        printf 'CONFIG_BACKUP_SSH_HOST_KEY_CHECKING=accept-new\n'
         printf 'BACKUP_CRON=0 2 * * * /scripts/backup-all.sh full >> /var/backups/cron.log 2>&1\n'
         printf 'MONITOR_INTERVAL_SECONDS=3600\nMAX_REQUEST_BYTES=1048576\n'
     } > "$ENV_FILE"

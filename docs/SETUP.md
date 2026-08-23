@@ -48,13 +48,16 @@ docker compose logs --tail=100 dashboard backup-cron backup-monitor
 ```
 
 Create profiles in the UI. For SSH profiles, install the public key on the
-target and verify its host fingerprint before recording it:
+target. Backupstic enrolls a new host key on first use and rejects later key
+changes:
 
 ```bash
 ssh-copy-id -i data/config-backup/id_ed25519.pub user@host
-ssh-keyscan -H host >> data/config-backup/known_hosts
-ssh-keygen -F host -f data/config-backup/known_hosts
 ```
+
+To require manual pre-enrollment instead, set
+`CONFIG_BACKUP_SSH_HOST_KEY_CHECKING=yes`, verify the fingerprint through a
+trusted channel, and add it with `ssh-keyscan`.
 
 ## 5. Repository strategy
 

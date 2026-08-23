@@ -50,16 +50,15 @@ private.
 ## SSH profile setup
 
 `./init.sh` creates one application keypair under `data/config-backup/`. Copy
-only its public key to each target and record the host key before creating the
-profile:
+only its public key to each target. New host keys are enrolled automatically on
+the first connection and changed host keys are still rejected:
 
 ```bash
 ssh-copy-id -i data/config-backup/id_ed25519.pub backup@example.internal
-ssh-keyscan -H example.internal >> data/config-backup/known_hosts
 ```
 
-Review the scanned fingerprint through a trusted channel. Backupstic refuses
-unknown or changed SSH host keys.
+For stricter pre-enrollment, set `CONFIG_BACKUP_SSH_HOST_KEY_CHECKING=yes` and
+add verified fingerprints to `data/config-backup/known_hosts` manually.
 
 ## Operations
 

@@ -17,6 +17,9 @@ seven days.
 - Keep the dashboard behind TLS and network access controls.
 - Never commit `configs/backup.env`, SSH private keys, repository passwords, or
   runtime data.
-- Verify SSH host fingerprints before adding them to `known_hosts`.
+- SSH host keys use trust-on-first-use by default (`accept-new`): new keys are
+  recorded automatically and changed keys are rejected. For higher assurance,
+  set `CONFIG_BACKUP_SSH_HOST_KEY_CHECKING=yes` and verify fingerprints before
+  adding them to `known_hosts`.
 - Use an independent off-host repository and test restores regularly.
 - Rotate any credential that was ever committed, even if later deleted.

@@ -55,6 +55,14 @@ CONFIG_BACKUP_SSH_PUBLIC_KEY_FILE = os.environ.get(
 )
 CONFIG_BACKUP_SSH_PUBLIC_KEY = os.environ.get('CONFIG_BACKUP_SSH_PUBLIC_KEY', '')
 SSH_CONNECT_TIMEOUT = int(os.environ.get('CONFIG_BACKUP_SSH_CONNECT_TIMEOUT', 10))
+SSH_HOST_KEY_CHECKING = os.environ.get(
+    'CONFIG_BACKUP_SSH_HOST_KEY_CHECKING',
+    'accept-new',
+).strip().lower()
+if SSH_HOST_KEY_CHECKING not in {'yes', 'accept-new', 'no'}:
+    raise RuntimeError(
+        'CONFIG_BACKUP_SSH_HOST_KEY_CHECKING must be yes, accept-new, or no'
+    )
 
 # Initialize auth
 init_auth(app)
@@ -313,7 +321,7 @@ def ssh_base_command(profile):
     common = [
         '-p', port,
         '-o', f'ConnectTimeout={SSH_CONNECT_TIMEOUT}',
-        '-o', 'StrictHostKeyChecking=yes',
+        '-o', f'StrictHostKeyChecking={SSH_HOST_KEY_CHECKING}',
         '-o', f'UserKnownHostsFile={os.environ.get("CONFIG_BACKUP_SSH_KNOWN_HOSTS", "/run/secrets/config-backup/known_hosts")}',
         '-o', 'LogLevel=ERROR',
     ]

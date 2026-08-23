@@ -2,6 +2,7 @@ import os
 import re
 import tempfile
 import unittest
+from unittest.mock import patch
 
 _runtime = tempfile.TemporaryDirectory()
 os.environ.setdefault('JWT_SECRET_KEY', 'j' * 48)
@@ -13,7 +14,7 @@ os.environ['BACKUP_BASE'] = _runtime.name
 os.environ['PROFILES_STORAGE'] = os.path.join(_runtime.name, 'profiles.json')
 os.environ['RESTIC_REPOSITORIES_STORAGE'] = os.path.join(_runtime.name, 'repositories.json')
 
-from frontend.app import app, valid_cron_expression
+from frontend.app import app, ssh_base_command, valid_cron_expression
 
 
 class ApplicationTests(unittest.TestCase):
@@ -40,6 +41,18 @@ class ApplicationTests(unittest.TestCase):
         ssh_path_input = re.search(r'<input[^>]+class="ssh-path-value"[^>]*>', html)
         self.assertIsNotNone(ssh_path_input)
         self.assertNotIn('required', ssh_path_input.group(0))
+
+    @patch('frontend.app.shutil.which', return_value='/usr/bin/sshpass')
+    def test_new_ssh_hosts_are_automatically_enrolled(self, _which):
+        command, _, error = ssh_base_command({
+            'ssh_host': 'new-host.example',
+            'ssh_port': 22,
+            'ssh_user': 'backup',
+            'auth_method': 'password',
+            'ssh_password': 'secret',
+        })
+        self.assertEqual(error, '')
+        self.assertIn('StrictHostKeyChecking=accept-new', command)
 
     def test_login(self):
         response = self.client.post('/api/login', json={
