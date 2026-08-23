@@ -52,6 +52,7 @@ services:
     <<: *backupstic
     container_name: backupstic-cron
     cap_add:
+      - CHOWN
       - SETGID
       - SETUID
     command:
