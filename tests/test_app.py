@@ -1,4 +1,5 @@
 import os
+import re
 import tempfile
 import unittest
 
@@ -25,6 +26,20 @@ class ApplicationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers['X-Content-Type-Options'], 'nosniff')
         self.assertEqual(response.headers['X-Frame-Options'], 'DENY')
+
+    def test_favicon_is_available(self):
+        response = self.client.get('/favicon.ico')
+        self.addCleanup(response.close)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, 'image/svg+xml')
+
+    def test_hidden_ssh_path_does_not_block_other_profile_types(self):
+        response = self.client.get('/')
+        self.addCleanup(response.close)
+        html = response.get_data(as_text=True)
+        ssh_path_input = re.search(r'<input[^>]+class="ssh-path-value"[^>]*>', html)
+        self.assertIsNotNone(ssh_path_input)
+        self.assertNotIn('required', ssh_path_input.group(0))
 
     def test_login(self):
         response = self.client.post('/api/login', json={

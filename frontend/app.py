@@ -405,6 +405,10 @@ def format_bytes(num_bytes):
 def index():
     return send_from_directory('static', 'index.html')
 
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory('static', 'favicon.svg', mimetype='image/svg+xml')
+
 @app.route('/<path:path>')
 def static_files(path):
     return send_from_directory('static', path)
