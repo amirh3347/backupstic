@@ -29,6 +29,8 @@ services:
   dashboard:
     <<: *backupstic
     container_name: backupstic-dashboard
+    cap_add:
+      - CHOWN
     command:
       - gunicorn
       - --bind=0.0.0.0:5000
