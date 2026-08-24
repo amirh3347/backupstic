@@ -1,4 +1,6 @@
 import gzip
+import fcntl
+import json
 import os
 import stat
 import subprocess
@@ -12,6 +14,79 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class BackupScriptIntegrationTests(unittest.TestCase):
+    def test_startup_schedule_sync_groups_profiles_with_the_same_time(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            backup_base = Path(temp_dir) / 'backups'
+            backup_base.mkdir()
+            profiles = {
+                'profiles': {
+                    'profile-a': {
+                        'id': 'profile-a',
+                        'enabled': True,
+                        'schedule': '0 2 * * *',
+                    },
+                    'profile-b': {
+                        'id': 'profile-b',
+                        'enabled': True,
+                        'schedule': '0 2 * * *',
+                    },
+                    'profile-disabled': {
+                        'id': 'profile-disabled',
+                        'enabled': False,
+                        'schedule': '0 2 * * *',
+                    },
+                }
+            }
+            (backup_base / 'profiles.json').write_text(json.dumps(profiles))
+            env = os.environ.copy()
+            env.update({
+                'BACKUP_BASE': str(backup_base),
+                'PROFILES_STORAGE': str(backup_base / 'profiles.json'),
+                'SCRIPTS_DIR': '/scripts',
+                'BACKUP_CRON': '0 2 * * * /scripts/backup-all.sh full',
+            })
+
+            result = subprocess.run(
+                [sys.executable, 'scripts/sync-schedules.py'],
+                cwd=PROJECT_ROOT,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            schedule = (backup_base / 'schedules.cron').read_text()
+            job_lines = [line for line in schedule.splitlines() if not line.startswith('#')]
+            self.assertEqual(len(job_lines), 1)
+            self.assertIn('profile-a profile-b', job_lines[0])
+            self.assertNotIn('profile-disabled', schedule)
+            self.assertNotIn('backup-all.sh full', schedule)
+
+    def test_busy_backup_lock_returns_failure_instead_of_silent_success(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            backup_base = Path(temp_dir) / 'backups'
+            backup_base.mkdir()
+            lock_path = backup_base / 'backup.lock'
+            with open(lock_path, 'w') as lock_handle:
+                fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                env = os.environ.copy()
+                env.update({
+                    'BACKUP_BASE': str(backup_base),
+                    'BACKUP_LOCK_WAIT_SECONDS': '0',
+                })
+                result = subprocess.run(
+                    ['bash', 'scripts/backup-all.sh', 'postgres'],
+                    cwd=PROJECT_ROOT,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    timeout=20,
+                    check=False,
+                )
+            self.assertEqual(result.returncode, 75, result.stdout + result.stderr)
+            self.assertIn('Timed out waiting for the backup lock', result.stdout)
+
     def test_monitor_handles_missing_backup_directories(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             runtime = Path(temp_dir)

@@ -73,6 +73,13 @@ The named Docker volume `backupstic-data` contains restic data, profiles,
 schedules, and logs. `docker compose down` keeps it; `docker compose down -v`
 deletes it and therefore must not be used unless data loss is intended.
 
+The cron container rebuilds `schedules.cron` from profile storage whenever it
+starts, and profile create/update/delete operations reconcile it immediately.
+Profiles with the same cron expression are placed in one sequential batch so
+the global backup lock cannot make same-minute jobs skip each other. Jobs that
+overlap for another reason wait up to `BACKUP_LOCK_WAIT_SECONDS` (six hours by
+default) before failing visibly in `cron.log`.
+
 For production, store the restic repository on durable independent storage,
 monitor failed jobs and disk usage, follow the 3-2-1 backup rule, and schedule
 regular restore tests. See [Setup](docs/SETUP.md), [API](docs/API.md), and

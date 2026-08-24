@@ -26,6 +26,7 @@ RESTIC_PASSWORD="${RESTIC_PASSWORD:-}"
 RETENTION_DAYS="${RETENTION_DAYS:-30}"
 RETENTION_WEEKLY="${RETENTION_WEEKLY:-12}"
 RETENTION_MONTHLY="${RETENTION_MONTHLY:-12}"
+BACKUP_LOCK_WAIT_SECONDS="${BACKUP_LOCK_WAIT_SECONDS:-21600}"
 
 # Logging
 log() {
@@ -72,10 +73,18 @@ mkdir -p "$BACKUP_BASE"
 # Global lock — prevent concurrent backups
 LOCK_FILE="$BACKUP_BASE/backup.lock"
 STATE_FILE="$BACKUP_BASE/backup.state"
+if [[ ! "$BACKUP_LOCK_WAIT_SECONDS" =~ ^[0-9]+$ ]]; then
+    log "Error: BACKUP_LOCK_WAIT_SECONDS must be a non-negative integer"
+    exit 64
+fi
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
-    log "Another backup is already running. Exiting."
-    exit 0
+    log "Another backup is already running; waiting up to ${BACKUP_LOCK_WAIT_SECONDS}s for the lock..."
+    if ! flock -w "$BACKUP_LOCK_WAIT_SECONDS" 9; then
+        log "Error: Timed out waiting for the backup lock."
+        exit 75
+    fi
+    log "Backup lock acquired; continuing queued job."
 fi
 
 # State file consumed by dashboard "backup in progress" indicator
@@ -291,35 +300,35 @@ elif [[ -n "$MODE" ]]; then
     run_postgres_backup() {
         log "Running PostgreSQL backup..."
         BACKUP_DIR="$BACKUP_BASE/postgresql" \
-            bash "$SCRIPT_DIR/postgresql.sh" > "$TMP_BACKUP/postgres.log" 2>&1
+            bash "$SCRIPT_DIR/postgresql.sh" 2>&1 | tee "$TMP_BACKUP/postgres.log"
         log "PostgreSQL backup completed"
     }
     
     run_redis_backup() {
         log "Running Redis backup..."
         BACKUP_DIR="$BACKUP_BASE/redis" \
-            bash "$SCRIPT_DIR/redis.sh" > "$TMP_BACKUP/redis.log" 2>&1
+            bash "$SCRIPT_DIR/redis.sh" 2>&1 | tee "$TMP_BACKUP/redis.log"
         log "Redis backup completed"
     }
     
     run_mongo_backup() {
         log "Running MongoDB backup..."
         BACKUP_DIR="$BACKUP_BASE/mongodb" \
-            bash "$SCRIPT_DIR/mongodb.sh" > "$TMP_BACKUP/mongo.log" 2>&1
+            bash "$SCRIPT_DIR/mongodb.sh" 2>&1 | tee "$TMP_BACKUP/mongo.log"
         log "MongoDB backup completed"
     }
     
     run_elasticsearch_backup() {
         log "Running Elasticsearch backup..."
         BACKUP_DIR="$BACKUP_BASE/elasticsearch" \
-            bash "$SCRIPT_DIR/elasticsearch.sh" > "$TMP_BACKUP/elasticsearch.log" 2>&1
+            bash "$SCRIPT_DIR/elasticsearch.sh" 2>&1 | tee "$TMP_BACKUP/elasticsearch.log"
         log "Elasticsearch backup completed"
     }
     
     run_files_backup() {
         log "Running Files backup..."
         BACKUP_DIR="$BACKUP_BASE/files" \
-            bash "$SCRIPT_DIR/files.sh" > "$TMP_BACKUP/files.log" 2>&1
+            bash "$SCRIPT_DIR/files.sh" 2>&1 | tee "$TMP_BACKUP/files.log"
         log "Files backup completed"
     }
     

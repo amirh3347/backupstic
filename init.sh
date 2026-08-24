@@ -42,6 +42,7 @@ if [ ! -f "$ENV_FILE" ]; then
         printf 'CONFIG_BACKUP_SSH_CONNECT_TIMEOUT=10\n'
         printf 'CONFIG_BACKUP_SSH_HOST_KEY_CHECKING=accept-new\n'
         printf 'BACKUP_CRON=0 2 * * * /scripts/backup-all.sh full >> /var/backups/cron.log 2>&1\n'
+        printf 'BACKUP_LOCK_WAIT_SECONDS=21600\n'
         printf 'MONITOR_INTERVAL_SECONDS=3600\nMAX_REQUEST_BYTES=1048576\n'
     } > "$ENV_FILE"
     chmod 0600 "$ENV_FILE"

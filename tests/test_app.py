@@ -67,6 +67,53 @@ class ApplicationTests(unittest.TestCase):
         self.assertFalse(valid_cron_expression('* * * * *\nmalicious'))
         self.assertFalse(valid_cron_expression('@daily'))
 
+    def test_profile_mutations_rebuild_grouped_crontab(self):
+        login = self.client.post('/api/login', json={
+            'username': 'admin',
+            'password': 'correct horse battery staple',
+        })
+        headers = {'Authorization': f"Bearer {login.get_json()['token']}"}
+        profile_ids = []
+
+        try:
+            for name in ('redis one', 'redis two'):
+                response = self.client.post('/api/profiles', headers=headers, json={
+                    'name': name,
+                    'type': 'redis',
+                    'host': 'redis.internal',
+                    'port': 6379,
+                    'password': '',
+                    'enabled': True,
+                    'schedule': '0 2 * * *',
+                    'repository_id': 'default',
+                })
+                self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+                profile_ids.append(response.get_json()['profile']['id'])
+
+            schedule_path = os.path.join(_runtime.name, 'schedules.cron')
+            with open(schedule_path, encoding='utf-8') as handle:
+                schedule = handle.read()
+            job_lines = [line for line in schedule.splitlines() if not line.startswith('#')]
+            self.assertEqual(len(job_lines), 1)
+            self.assertIn('/scripts/backup-profile-batch.sh', job_lines[0])
+            self.assertTrue(all(profile_id in job_lines[0] for profile_id in profile_ids))
+            self.assertNotIn('backup-all.sh full', schedule)
+
+            response = self.client.put(
+                f'/api/profiles/{profile_ids[0]}',
+                headers=headers,
+                json={'schedule': '30 3 * * *'},
+            )
+            self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+            with open(schedule_path, encoding='utf-8') as handle:
+                schedule = handle.read()
+            job_lines = [line for line in schedule.splitlines() if not line.startswith('#')]
+            self.assertEqual(len(job_lines), 2)
+            self.assertIn('30 3 * * *', schedule)
+        finally:
+            for profile_id in profile_ids:
+                self.client.delete(f'/api/profiles/{profile_id}', headers=headers)
+
 
 if __name__ == '__main__':
     unittest.main()

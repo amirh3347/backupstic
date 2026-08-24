@@ -6,10 +6,8 @@ import json
 import subprocess
 import datetime
 import fcntl
-import uuid
 import shutil
 import tempfile
-import re
 from collections import deque
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory, send_file, after_this_request
@@ -33,6 +31,11 @@ from profiles import (
     sanitize_repository,
 )
 from auth import AuthManager, token_required, init_auth
+from schedules import (
+    sync_profile_schedules_from_loader,
+    valid_cron_expression,
+    write_schedule_file,
+)
 
 app = Flask(__name__, static_folder='static')
 app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('MAX_REQUEST_BYTES', 1048576))
@@ -62,6 +65,17 @@ SSH_HOST_KEY_CHECKING = os.environ.get(
 if SSH_HOST_KEY_CHECKING not in {'yes', 'accept-new', 'no'}:
     raise RuntimeError(
         'CONFIG_BACKUP_SSH_HOST_KEY_CHECKING must be yes, accept-new, or no'
+    )
+
+
+def sync_profile_crontab():
+    """Publish a complete schedule derived from the latest profile storage."""
+    return sync_profile_schedules_from_loader(
+        lambda: get_storage().get_all(),
+        os.path.join(BACKUP_BASE, 'schedules.cron'),
+        scripts_dir=SCRIPTS_DIR,
+        backup_base=BACKUP_BASE,
+        fallback_entry=os.environ.get('BACKUP_CRON', ''),
     )
 
 # Initialize auth
@@ -490,6 +504,7 @@ def create_profile():
     
     storage = get_storage()
     profile = storage.create(data)
+    sync_profile_crontab()
     return jsonify({'success': True, 'profile': sanitize_profile(profile)})
 
 @app.route('/api/profiles/<profile_id>', methods=['GET'])
@@ -542,6 +557,7 @@ def update_profile(profile_id):
     profile = storage.update(profile_id, merged)
     if profile is None:
         return jsonify({'success': False, 'error': 'Profile not found'}), 404
+    sync_profile_crontab()
     return jsonify({'success': True, 'profile': sanitize_profile(profile)})
 
 @app.route('/api/profiles/<profile_id>', methods=['DELETE'])
@@ -556,6 +572,7 @@ def delete_profile(profile_id):
     success = storage.delete(profile_id)
     if not success:
         return jsonify({'success': False, 'error': 'Profile not found'}), 404
+    sync_profile_crontab()
     return jsonify({
         'success': True,
         'message': 'Profile deleted; existing snapshots were preserved',
@@ -949,30 +966,6 @@ def download_backup(backup_id):
 
 # ==================== LOGS AND SCHEDULING ENDPOINTS ====================
 
-def valid_cron_expression(expression):
-    """Accept numeric five-field cron expressions without control syntax."""
-    fields = expression.split()
-    return len(fields) == 5 and all(
-        re.fullmatch(r'[0-9*/,\-]+', field) for field in fields
-    )
-
-
-def _write_schedule_file(schedule_file, lines):
-    """Atomically publish the crontab consumed by the cron container."""
-    os.makedirs(os.path.dirname(schedule_file), exist_ok=True)
-    temp_path = f'{schedule_file}.{uuid.uuid4().hex}.tmp'
-    descriptor = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    try:
-        with os.fdopen(descriptor, 'w', encoding='utf-8') as handle:
-            handle.write('\n'.join(lines).rstrip() + '\n')
-        os.replace(temp_path, schedule_file)
-    except Exception:
-        try:
-            os.unlink(temp_path)
-        except FileNotFoundError:
-            pass
-        raise
-
 @app.route('/api/logs')
 @token_required
 def get_logs():
@@ -999,7 +992,7 @@ def get_schedule():
 @app.route('/api/schedule', methods=['POST'])
 @token_required
 def update_schedule():
-    """Update backup schedule"""
+    """Update the legacy schedule when profile scheduling is not in use."""
     data = request.get_json() or {}
     cron_expr = data.get('cron', '')
     mode = data.get('mode', 'full')
@@ -1012,18 +1005,19 @@ def update_schedule():
     if mode not in ['full', 'db', 'files', 'postgres', 'redis', 'mongo', 'elasticsearch']:
         return jsonify({'success': False, 'error': 'Invalid backup mode'}), 400
 
+    if get_storage().get_all():
+        return jsonify({
+            'success': False,
+            'error': 'Global legacy schedules cannot be combined with profile schedules'
+        }), 409
+
     # Build crontab entry for legacy mode (kept for compatibility)
     entry = f"{cron_expr} {SCRIPTS_DIR}/backup-all.sh {mode} >> {BACKUP_BASE}/cron.log 2>&1"
 
-    schedule_file = os.path.join(BACKUP_BASE, 'schedules.cron')
-    try:
-        with open(schedule_file, encoding='utf-8') as handle:
-            lines = handle.read().splitlines()
-    except FileNotFoundError:
-        lines = []
-    lines = [l for l in lines if 'backup-all.sh' not in l and l.strip()]
-    lines.append(entry)
-    _write_schedule_file(schedule_file, lines)
+    write_schedule_file(
+        os.path.join(BACKUP_BASE, 'schedules.cron'),
+        ['# Managed by Backupstic; manual edits may be replaced.', entry],
+    )
     return jsonify({'success': True, 'message': 'Schedule updated'})
 
 @app.route('/api/profile-schedule', methods=['POST'])
@@ -1055,21 +1049,7 @@ def update_profile_schedule():
     if updated_profile is None:
         return jsonify({'success': False, 'error': 'Failed to update profile'}), 500
 
-    # Also update the system cron job for this profile
-    # Remove existing cron entries for this profile
-    schedule_file = os.path.join(BACKUP_BASE, 'schedules.cron')
-    try:
-        with open(schedule_file, encoding='utf-8') as handle:
-            lines = handle.read().splitlines()
-    except FileNotFoundError:
-        lines = []
-    lines = [l for l in lines if f'backup-profile.sh {profile_id}' not in l and l.strip()]
-
-    # Add new cron entry
-    entry = f"{cron_expr} {SCRIPTS_DIR}/backup-profile.sh {profile_id} >> {BACKUP_BASE}/cron.log 2>&1"
-    lines.append(entry)
-
-    _write_schedule_file(schedule_file, lines)
+    sync_profile_crontab()
     return jsonify({'success': True, 'message': 'Profile schedule updated'})
 
 @app.route('/api/retention')

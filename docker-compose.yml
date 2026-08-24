@@ -63,9 +63,7 @@ services:
       - |
         umask 077
         schedule=/var/backups/schedules.cron
-        if [ ! -s "$${schedule}" ]; then
-          printf '%s\n' "$${BACKUP_CRON}" > "$${schedule}"
-        fi
+        python3 /scripts/sync-schedules.py
         rm -f /etc/crontabs/root
         ln -s "$${schedule}" /etc/crontabs/root
         exec crond -f -l 8
