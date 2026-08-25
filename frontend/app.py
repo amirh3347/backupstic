@@ -58,6 +58,14 @@ CONFIG_BACKUP_SSH_PUBLIC_KEY_FILE = os.environ.get(
 )
 CONFIG_BACKUP_SSH_PUBLIC_KEY = os.environ.get('CONFIG_BACKUP_SSH_PUBLIC_KEY', '')
 SSH_CONNECT_TIMEOUT = int(os.environ.get('CONFIG_BACKUP_SSH_CONNECT_TIMEOUT', 10))
+MANUAL_BACKUP_LOG_MAX_BYTES = max(
+    1,
+    int(os.environ.get('MANUAL_BACKUP_LOG_MAX_BYTES', 10 * 1024 * 1024)),
+)
+MANUAL_BACKUP_LOG_BACKUP_COUNT = max(
+    0,
+    int(os.environ.get('MANUAL_BACKUP_LOG_BACKUP_COUNT', 3)),
+)
 SSH_HOST_KEY_CHECKING = os.environ.get(
     'CONFIG_BACKUP_SSH_HOST_KEY_CHECKING',
     'accept-new',
@@ -82,22 +90,29 @@ def sync_profile_crontab():
 init_auth(app)
 
 def start_background(args):
-    """Start a detached backup process and append its output to the shared log."""
+    """Start a detached backup process with size-bounded rotating output."""
     os.makedirs(BACKUP_BASE, exist_ok=True)
     log_path = os.path.join(BACKUP_BASE, 'manual_backup.log')
-    log_handle = open(log_path, 'a', encoding='utf-8')
-    try:
-        subprocess.Popen(
-            args,
-            stdin=subprocess.DEVNULL,
-            stdout=log_handle,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-            close_fds=True,
-            env=os.environ.copy(),
-        )
-    finally:
-        log_handle.close()
+    subprocess.Popen(
+        [
+            sys.executable,
+            os.path.join(SCRIPTS_DIR, 'run-with-rotating-log.py'),
+            '--log-file',
+            log_path,
+            '--max-bytes',
+            str(MANUAL_BACKUP_LOG_MAX_BYTES),
+            '--backup-count',
+            str(MANUAL_BACKUP_LOG_BACKUP_COUNT),
+            '--',
+            *args,
+        ],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+        close_fds=True,
+        env=os.environ.copy(),
+    )
 
 
 @app.after_request

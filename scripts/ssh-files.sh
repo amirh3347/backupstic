@@ -198,6 +198,11 @@ for entry in "${PATH_ENTRIES[@]}"; do
         if [ "$LOG_RSYNC_OUTPUT" = "true" ]; then
             sed 's/^/[rsync] /' "$WORK_DIR/rsync_${COPIED_PATHS}.log"
         fi
+        if [ "$PRESERVE_METADATA" = "true" ] \
+            && grep -Fq "$WORK_DIR" "$WORK_DIR/rsync_${COPIED_PATHS}.log" \
+            && grep -Eq 'Permission denied|Operation not permitted' "$WORK_DIR/rsync_${COPIED_PATHS}.log"; then
+            fail "rsync cannot preserve metadata in the local staging directory. The backup container needs CHOWN, FOWNER, and DAC_OVERRIDE capabilities."
+        fi
         if [ "$ATTEMPT" -ge 3 ]; then
             fail "rsync failed for $REMOTE_PATH after 3 attempts with exit code $STATUS"
         fi

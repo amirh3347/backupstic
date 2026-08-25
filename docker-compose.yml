@@ -31,6 +31,8 @@ services:
     container_name: backupstic-dashboard
     cap_add:
       - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
     command:
       - gunicorn
       - --bind=0.0.0.0:5000
@@ -55,6 +57,8 @@ services:
     container_name: backupstic-cron
     cap_add:
       - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
       - SETGID
       - SETUID
     command:

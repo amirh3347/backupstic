@@ -14,7 +14,7 @@ os.environ['BACKUP_BASE'] = _runtime.name
 os.environ['PROFILES_STORAGE'] = os.path.join(_runtime.name, 'profiles.json')
 os.environ['RESTIC_REPOSITORIES_STORAGE'] = os.path.join(_runtime.name, 'repositories.json')
 
-from frontend.app import app, ssh_base_command, valid_cron_expression
+from frontend.app import app, ssh_base_command, start_background, valid_cron_expression
 
 
 class ApplicationTests(unittest.TestCase):
@@ -66,6 +66,16 @@ class ApplicationTests(unittest.TestCase):
         self.assertTrue(valid_cron_expression('0 2 * * *'))
         self.assertFalse(valid_cron_expression('* * * * *\nmalicious'))
         self.assertFalse(valid_cron_expression('@daily'))
+
+    @patch('frontend.app.subprocess.Popen')
+    def test_manual_backup_uses_bounded_log_runner(self, popen):
+        start_background(['/scripts/backup-all.sh', 'full'])
+
+        command = popen.call_args.args[0]
+        self.assertIn('/scripts/run-with-rotating-log.py', command)
+        self.assertIn('--max-bytes', command)
+        self.assertIn('--backup-count', command)
+        self.assertEqual(command[-2:], ['/scripts/backup-all.sh', 'full'])
 
     def test_profile_mutations_rebuild_grouped_crontab(self):
         login = self.client.post('/api/login', json={

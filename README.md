@@ -72,6 +72,9 @@ docker compose down
 The named Docker volume `backupstic-data` contains restic data, profiles,
 schedules, and logs. `docker compose down` keeps it; `docker compose down -v`
 deletes it and therefore must not be used unless data loss is intended.
+Manual-run output is size-rotated at 10 MiB with three old files by default;
+`MANUAL_BACKUP_LOG_MAX_BYTES` and `MANUAL_BACKUP_LOG_BACKUP_COUNT` configure
+those limits.
 
 The cron container rebuilds `schedules.cron` from profile storage whenever it
 starts, and profile create/update/delete operations reconcile it immediately.
