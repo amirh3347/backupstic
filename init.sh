@@ -3,7 +3,27 @@ set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$PROJECT_DIR/configs/backup.env"
+COMPOSE_ENV_FILE="$PROJECT_DIR/.env"
 SSH_DIR="$PROJECT_DIR/data/config-backup"
+
+with_postgres_verify=false
+for arg in "$@"; do
+    case "$arg" in
+        --with-postgres-verify) with_postgres_verify=true ;;
+        -h|--help)
+            echo "Usage: $0 [--with-postgres-verify]"
+            echo "  --with-postgres-verify  enable the scratch PostgreSQL used to test-restore dumps"
+            exit 0
+            ;;
+        *) echo "Unknown option: $arg" >&2; exit 64 ;;
+    esac
+done
+
+# Print KEY's value from an env file (empty when absent).
+env_value() {
+    [ -f "$2" ] || return 0
+    sed -n "s/^$1=//p" "$2" | tail -n 1
+}
 
 for command_name in docker openssl ssh-keygen; do
     command -v "$command_name" >/dev/null 2>&1 || {
@@ -59,6 +79,29 @@ touch "$SSH_DIR/known_hosts"
 chmod 0600 "$SSH_DIR/id_ed25519" "$SSH_DIR/known_hosts"
 chmod 0644 "$SSH_DIR/id_ed25519.pub"
 chmod 0755 "$PROJECT_DIR/scripts" "$PROJECT_DIR/scripts"/*.sh "$PROJECT_DIR/scripts"/*.py
+
+if [ "$with_postgres_verify" = true ]; then
+    # Reuse an existing password: the postgres image only applies it when its
+    # data volume is first created.
+    verify_password="$(env_value VERIFY_POSTGRES_PASSWORD "$COMPOSE_ENV_FILE")"
+    if [ -z "$verify_password" ]; then
+        verify_password="$(openssl rand -hex 24)"
+        printf 'VERIFY_POSTGRES_PASSWORD=%s\n' "$verify_password" >> "$COMPOSE_ENV_FILE"
+    fi
+    profiles="$(env_value COMPOSE_PROFILES "$COMPOSE_ENV_FILE")"
+    case ",$profiles," in
+        *,verify-postgres,*) ;;
+        *)
+            sed -i '/^COMPOSE_PROFILES=/d' "$COMPOSE_ENV_FILE"
+            printf 'COMPOSE_PROFILES=%s\n' "${profiles:+$profiles,}verify-postgres" >> "$COMPOSE_ENV_FILE"
+            ;;
+    esac
+    chmod 0600 "$COMPOSE_ENV_FILE"
+    if [ -z "$(env_value VERIFY_POSTGRES_URL "$ENV_FILE")" ]; then
+        printf 'VERIFY_POSTGRES_URL=postgresql://postgres:%s@verify-postgres:5432/postgres\n' "$verify_password" >> "$ENV_FILE"
+    fi
+    echo "Enabled PostgreSQL restore tests (verify-postgres service)."
+fi
 
 (cd "$PROJECT_DIR" && docker compose config >/dev/null)
 

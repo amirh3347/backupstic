@@ -66,7 +66,34 @@ production use, add a separate S3/MinIO repository or place repository storage
 on independent durable infrastructure. Follow the 3-2-1 rule: three copies,
 two storage types, and one off-site copy.
 
-## 6. Restore drill
+## 6. Backup health checks
+
+Every backup row in the dashboard has a **Verify** button. It restores the
+snapshot, builds the encrypted download bundle, extracts it, opens it with the
+repository password, compares checksums, and fully reads every archive.
+Redis RDB files are checked with `redis-check-rdb`.
+
+PostgreSQL dumps can only be proven restorable by PostgreSQL itself. To enable
+that step, run a dedicated scratch server next to the dashboard:
+
+```bash
+./init.sh --with-postgres-verify
+docker compose up -d --build
+```
+
+This adds `VERIFY_POSTGRES_PASSWORD` and `COMPOSE_PROFILES=verify-postgres` to
+`.env`, `VERIFY_POSTGRES_URL` to `configs/backup.env`, and starts the
+`verify-postgres` container (PostgreSQL 18, no published port). Each database in
+a dump is restored into a temporary `backupstic_verify_*` database that is
+dropped afterwards. Without this setup the step is reported as "skipped" and the
+rest of the health check works unchanged.
+
+Use a dedicated server only: cluster dumps (`pg_dumpall`) create roles, so they
+are refused on a server that contains other databases or roles. The scratch
+server must run a PostgreSQL major version at least as new as the image's
+`pg_dump` (18).
+
+## 7. Restore drill
 
 Run a restore into an isolated path and validate application-level integrity:
 

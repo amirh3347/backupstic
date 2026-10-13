@@ -3,421 +3,637 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Backup Dashboard</title>
+    <meta name="color-scheme" content="dark light">
+    <title>Backupstic · Backup Dashboard</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <style>
-        * {
+        *,
+        *::before,
+        *::after {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
 
         :root {
-            --page: #0c1117;
-            --surface: #151b23;
-            --surface-2: #1b2430;
-            --surface-3: #263342;
-            --border: #334456;
-            --border-soft: #253242;
-            --text: #edf2f7;
-            --muted: #9fb0bf;
-            --faint: #6f8292;
+            color-scheme: dark;
+            --page: #0a0e13;
+            --surface: #10151c;
+            --surface-2: #151b24;
+            --surface-3: #1c2430;
+            --border: #263140;
+            --border-soft: #1c2430;
+            --text: #e7edf4;
+            --muted: #97a5b4;
+            --faint: #66778a;
             --blue: #4f8cff;
-            --blue-2: #2f6fdb;
-            --cyan: #28c7d9;
-            --green: #2bb673;
-            --green-2: #178656;
-            --amber: #e1a83a;
-            --red: #d94c4c;
+            --blue-2: #3a76ec;
+            --cyan: #22c3d6;
+            --green: #22b573;
+            --green-2: #179a5f;
+            --amber: #e5a53a;
+            --red: #ef5b5b;
+            --red-2: #d64545;
             --violet: #9b7cff;
-            --shadow: rgba(0, 0, 0, 0.24);
+            --blue-soft: rgba(79, 140, 255, 0.13);
+            --blue-line: rgba(79, 140, 255, 0.32);
+            --blue-text: #a5c3ff;
+            --green-soft: rgba(34, 181, 115, 0.13);
+            --green-line: rgba(34, 181, 115, 0.34);
+            --green-text: #72dfaa;
+            --amber-soft: rgba(229, 165, 58, 0.13);
+            --amber-line: rgba(229, 165, 58, 0.34);
+            --amber-text: #f3c56f;
+            --red-soft: rgba(239, 91, 91, 0.13);
+            --red-line: rgba(239, 91, 91, 0.34);
+            --red-text: #ffa3a3;
+            --violet-soft: rgba(155, 124, 255, 0.13);
+            --violet-line: rgba(155, 124, 255, 0.32);
+            --violet-text: #c9b8ff;
+            --neutral-soft: rgba(151, 165, 180, 0.11);
+            --neutral-line: rgba(151, 165, 180, 0.26);
+            --ring: rgba(79, 140, 255, 0.45);
+            --header-bg: rgba(10, 14, 19, 0.82);
+            --input-bg: #0c1117;
+            --overlay: rgba(3, 6, 10, 0.66);
+            --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 16px 40px rgba(0, 0, 0, 0.32);
+            --shadow-lg: 0 30px 80px rgba(0, 0, 0, 0.55);
+            --radius: 14px;
+            --radius-sm: 9px;
+            --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
         }
 
         body.theme-light {
-            --page: #f3f6f8;
+            color-scheme: light;
+            --page: #f3f5f9;
             --surface: #ffffff;
-            --surface-2: #f7fafc;
-            --surface-3: #e8eef3;
-            --border: #cdd8e1;
-            --border-soft: #dfe7ee;
-            --text: #17212b;
-            --muted: #526475;
-            --faint: #7a8b9a;
+            --surface-2: #f7f9fc;
+            --surface-3: #eef2f7;
+            --border: #d8dfe8;
+            --border-soft: #e9eef4;
+            --text: #111827;
+            --muted: #4d5b6c;
+            --faint: #7b8898;
             --blue: #2563eb;
             --blue-2: #1d4ed8;
             --cyan: #0891b2;
-            --green: #15905d;
-            --green-2: #0f754b;
-            --amber: #bd7a16;
-            --red: #c43f3f;
+            --green: #15935e;
+            --green-2: #0f7a4c;
+            --amber: #c27c12;
+            --red: #d93a3a;
+            --red-2: #b92e2e;
             --violet: #7456d8;
-            --shadow: rgba(31, 45, 61, 0.10);
+            --blue-soft: rgba(37, 99, 235, 0.08);
+            --blue-line: rgba(37, 99, 235, 0.25);
+            --blue-text: #1d4ed8;
+            --green-soft: rgba(21, 147, 94, 0.09);
+            --green-line: rgba(21, 147, 94, 0.28);
+            --green-text: #0d7346;
+            --amber-soft: rgba(194, 124, 18, 0.10);
+            --amber-line: rgba(194, 124, 18, 0.30);
+            --amber-text: #8a5708;
+            --red-soft: rgba(217, 58, 58, 0.08);
+            --red-line: rgba(217, 58, 58, 0.28);
+            --red-text: #b42323;
+            --violet-soft: rgba(116, 86, 216, 0.09);
+            --violet-line: rgba(116, 86, 216, 0.26);
+            --violet-text: #5b3fc0;
+            --neutral-soft: rgba(77, 91, 108, 0.07);
+            --neutral-line: rgba(77, 91, 108, 0.20);
+            --ring: rgba(37, 99, 235, 0.35);
+            --header-bg: rgba(255, 255, 255, 0.85);
+            --input-bg: #ffffff;
+            --overlay: rgba(17, 24, 39, 0.42);
+            --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.06);
+            --shadow-lg: 0 30px 70px rgba(16, 24, 40, 0.22);
+        }
+
+        html {
+            -webkit-text-size-adjust: 100%;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            font-family: var(--font);
+            font-size: 14px;
+            line-height: 1.45;
             background:
-                radial-gradient(circle at 18% 0%, rgba(40, 199, 217, 0.14), transparent 30%),
-                radial-gradient(circle at 84% 8%, rgba(155, 124, 255, 0.13), transparent 28%),
-                linear-gradient(180deg, rgba(42, 57, 71, 0.62) 0, rgba(16, 20, 24, 0) 300px),
+                radial-gradient(1200px 420px at 12% -8%, rgba(79, 140, 255, 0.12), transparent 60%),
+                radial-gradient(900px 380px at 92% -10%, rgba(155, 124, 255, 0.10), transparent 60%),
                 var(--page);
+            background-attachment: fixed;
             color: var(--text);
             min-height: 100vh;
-            position: relative;
+            -webkit-font-smoothing: antialiased;
         }
 
         body.theme-light {
             background:
-                radial-gradient(circle at 18% 0%, rgba(8, 145, 178, 0.12), transparent 30%),
-                radial-gradient(circle at 84% 8%, rgba(116, 86, 216, 0.10), transparent 28%),
-                linear-gradient(180deg, rgba(217, 229, 239, 0.9) 0, rgba(243, 246, 248, 0) 300px),
+                radial-gradient(1200px 420px at 12% -8%, rgba(37, 99, 235, 0.07), transparent 60%),
+                radial-gradient(900px 380px at 92% -10%, rgba(116, 86, 216, 0.06), transparent 60%),
                 var(--page);
+            background-attachment: fixed;
         }
 
+        button,
+        input,
+        select,
+        textarea {
+            font: inherit;
+            color: inherit;
+        }
+
+        :focus-visible {
+            outline: 2px solid var(--ring);
+            outline-offset: 2px;
+        }
+
+        .icon {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        /* ---------- Header ---------- */
         .header {
-            background: rgba(23, 29, 36, 0.94);
-            padding: 16px clamp(20px, 3vw, 48px);
-            border-bottom: 1px solid var(--border);
+            background: var(--header-bg);
+            padding: 12px clamp(16px, 3vw, 40px);
+            border-bottom: 1px solid var(--border-soft);
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            gap: 20px;
+            gap: 16px;
             position: sticky;
             top: 0;
             z-index: 50;
-            backdrop-filter: blur(12px);
+            backdrop-filter: saturate(160%) blur(14px);
+            -webkit-backdrop-filter: saturate(160%) blur(14px);
         }
 
-        body.theme-light .header {
-            background: rgba(255, 255, 255, 0.92);
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .brand-mark {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, var(--blue), var(--violet));
+            box-shadow: 0 6px 18px rgba(79, 140, 255, 0.35);
+            color: #fff;
+            flex-shrink: 0;
+        }
+
+        .brand-mark .icon {
+            width: 20px;
+            height: 20px;
         }
 
         .header h1 {
-            font-size: 22px;
+            font-size: 17px;
             font-weight: 700;
+            letter-spacing: -0.01em;
             color: var(--text);
-            letter-spacing: 0;
+            line-height: 1.15;
+        }
+
+        .brand-sub {
+            font-size: 12px;
+            color: var(--faint);
         }
 
         .header .user-info {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             color: var(--muted);
             margin-left: auto;
+            font-size: 13px;
         }
 
-        .header .btn-logout {
-            padding: 8px 14px;
-            border-radius: 6px;
-            background: rgba(217, 76, 76, 0.18);
-            color: white;
-            border: 1px solid rgba(217, 76, 76, 0.5);
-            font-size: 14px;
-            cursor: pointer;
+        .user-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: var(--neutral-soft);
+            border: 1px solid var(--border-soft);
         }
 
-        .header .btn-logout:hover {
-            background: rgba(217, 76, 76, 0.28);
+        .user-chip:empty {
+            display: none;
         }
 
+        .header .btn-logout,
         .theme-toggle {
-            padding: 8px 12px;
-            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 12px;
+            border-radius: var(--radius-sm);
             border: 1px solid var(--border);
             background: var(--surface-2);
             color: var(--text);
-            font-size: 14px;
+            font-size: 13px;
+            font-weight: 500;
             cursor: pointer;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
         }
 
         .theme-toggle:hover {
             background: var(--surface-3);
         }
 
-        .status-badge {
-            padding: 7px 12px;
-            border-radius: 999px;
-            font-size: 13px;
-            font-weight: 600;
+        .header .btn-logout:hover {
+            background: var(--red-soft);
+            border-color: var(--red-line);
+            color: var(--red-text);
         }
 
-        .status-healthy { background: rgba(43, 182, 115, 0.15); color: #73e0aa; border: 1px solid rgba(43, 182, 115, 0.35); }
-        .status-error { background: rgba(217, 76, 76, 0.15); color: #ff9b9b; border: 1px solid rgba(217, 76, 76, 0.35); }
-        .status-warning { background: rgba(217, 154, 43, 0.14); color: #f4c266; border: 1px solid rgba(217, 154, 43, 0.35); }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 6px 11px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
 
+        .status-badge::before {
+            content: '';
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: currentColor;
+            box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 22%, transparent);
+        }
+
+        .status-healthy { background: var(--green-soft); color: var(--green-text); border: 1px solid var(--green-line); }
+        .status-error { background: var(--red-soft); color: var(--red-text); border: 1px solid var(--red-line); }
+        .status-warning { background: var(--amber-soft); color: var(--amber-text); border: 1px solid var(--amber-line); }
+
+        /* ---------- Layout ---------- */
         .container {
             width: 100%;
-            max-width: 1920px;
+            max-width: 1760px;
             margin: 0 auto;
-            padding: 28px clamp(18px, 2.4vw, 44px) 44px;
+            padding: 24px clamp(16px, 2.4vw, 40px) 48px;
         }
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(4, minmax(180px, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 16px;
-            margin-bottom: 18px;
+            margin-bottom: 20px;
         }
 
         .stat-card {
-            background: linear-gradient(180deg, rgba(34, 47, 60, 0.96), rgba(21, 27, 35, 0.98));
-            border-radius: 8px;
-            padding: 20px;
-            border: 1px solid var(--border);
-            min-height: 130px;
+            background: var(--surface);
+            border-radius: var(--radius);
+            padding: 18px 20px;
+            border: 1px solid var(--border-soft);
             position: relative;
             overflow: hidden;
-            box-shadow: 0 18px 34px var(--shadow);
+            box-shadow: var(--shadow);
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: start;
+            column-gap: 12px;
         }
 
-        body.theme-light .stat-card {
-            background: linear-gradient(180deg, #ffffff, #f8fbfd);
-            box-shadow: 0 14px 28px rgba(31, 45, 61, 0.08);
+        .stat-card > :not(.stat-icon) {
+            grid-column: 1;
         }
 
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            inset: 0 0 auto 0;
-            height: 3px;
-            background: var(--blue);
+        .stat-icon {
+            grid-column: 2;
+            grid-row: 1 / span 3;
+            width: 40px;
+            height: 40px;
+            border-radius: 11px;
+            display: grid;
+            place-items: center;
+            background: var(--blue-soft);
+            color: var(--blue-text);
         }
 
-        .stat-card:nth-child(2)::before { background: var(--green); }
-        .stat-card:nth-child(3)::before { background: var(--amber); }
-        .stat-card:nth-child(4)::before { background: var(--violet); }
-
-        .stat-card:hover {
-            border-color: #455868;
+        .stat-icon .icon {
+            width: 20px;
+            height: 20px;
         }
+
+        .stat-card:nth-child(2) .stat-icon { background: var(--green-soft); color: var(--green-text); }
+        .stat-card:nth-child(3) .stat-icon { background: var(--amber-soft); color: var(--amber-text); }
+        .stat-card:nth-child(4) .stat-icon { background: var(--violet-soft); color: var(--violet-text); }
 
         .stat-card .label {
             font-size: 12px;
             color: var(--muted);
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            font-weight: 700;
+            margin-bottom: 8px;
+            font-weight: 600;
         }
 
         .stat-card .value {
-            font-size: 34px;
+            font-size: 28px;
             font-weight: 700;
             color: var(--text);
-            line-height: 1.05;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+            font-variant-numeric: tabular-nums;
         }
 
         .stat-card .sub {
-            font-size: 13px;
+            font-size: 12px;
             color: var(--faint);
             margin-top: 8px;
         }
 
         .main-content {
             display: grid;
-            grid-template-columns: minmax(680px, 1.25fr) minmax(520px, 0.75fr);
-            gap: 18px;
+            grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+            gap: 20px;
             align-items: start;
         }
 
         .side-column {
             display: grid;
-            gap: 18px;
+            gap: 20px;
             min-width: 0;
         }
 
         .card {
-            background: rgba(23, 29, 36, 0.96);
-            border-radius: 8px;
-            border: 1px solid var(--border);
+            background: var(--surface);
+            border-radius: var(--radius);
+            border: 1px solid var(--border-soft);
             overflow: hidden;
-            box-shadow: 0 18px 38px var(--shadow);
-        }
-
-        body.theme-light .card {
-            background: rgba(255, 255, 255, 0.96);
-            box-shadow: 0 14px 32px rgba(31, 45, 61, 0.08);
+            box-shadow: var(--shadow);
+            min-width: 0;
         }
 
         .card-header {
-            padding: 16px 18px;
+            padding: 16px 20px;
             border-bottom: 1px solid var(--border-soft);
             display: flex;
             justify-content: space-between;
             align-items: center;
             gap: 12px;
-            background: linear-gradient(90deg, rgba(29, 38, 48, 0.94), rgba(29, 38, 48, 0.58));
-        }
-
-        body.theme-light .card-header {
-            background: rgba(247, 250, 252, 0.86);
-        }
-
-        .card-header h2 {
-            font-size: 16px;
-            font-weight: 700;
-            color: var(--text);
-        }
-
-        .card-header .btn {
-            padding: 8px 16px;
-            font-size: 14px;
-        }
-
-        .card-body {
-            padding: 18px;
-            overflow-x: auto;
-        }
-
-        .profiles-table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 860px;
-        }
-
-        .profiles-table th,
-        .profiles-table td {
-            padding: 14px 16px;
-            text-align: left;
-            border-bottom: 1px solid var(--border-soft);
-        }
-
-        .profiles-table th {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--muted);
-            text-transform: uppercase;
-            background: rgba(16, 20, 24, 0.38);
-        }
-
-        body.theme-light .profiles-table th,
-        body.theme-light .backups-table th {
-            background: #f5f8fb;
-        }
-
-        .profiles-table tbody tr:hover td {
-            background-color: rgba(36, 49, 61, 0.72);
-        }
-
-        body.theme-light .profiles-table tbody tr:hover td,
-        body.theme-light .backups-table tbody tr:hover td {
-            background-color: #eef4f8;
-        }
-
-        .profile-type {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 500;
-            text-transform: uppercase;
-        }
-
-        .type-postgresql { background: rgba(79, 140, 255, 0.14); color: #9fc2ff; border: 1px solid rgba(79, 140, 255, 0.25); }
-        .type-mongodb { background: rgba(43, 182, 115, 0.14); color: #8be0b5; border: 1px solid rgba(43, 182, 115, 0.25); }
-        .type-redis { background: rgba(217, 76, 76, 0.14); color: #ffa2a2; border: 1px solid rgba(217, 76, 76, 0.25); }
-        .type-ssh-files { background: rgba(155, 124, 255, 0.14); color: #c6b5ff; border: 1px solid rgba(155, 124, 255, 0.25); }
-
-        .profile-status {
-            display: inline-block;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 11px;
-            font-weight: 500;
-        }
-
-        .status-enabled { background: rgba(43, 182, 115, 0.14); color: #a6e9c7; }
-        .status-disabled { background: rgba(217, 76, 76, 0.14); color: #ffc1c1; }
-
-        .btn-group {
-            display: flex;
-            gap: 8px;
             flex-wrap: wrap;
         }
 
-        .btn {
-            padding: 10px 16px;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            border: none;
-            transition: all 0.2s;
+        .card-header h2 {
+            font-size: 15px;
+            font-weight: 650;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 9px;
+        }
+
+        .card-header h2 .icon {
+            color: var(--faint);
+        }
+
+        .card-body {
+            padding: 16px 20px 18px;
+            overflow-x: auto;
+        }
+
+        /* ---------- Tables ---------- */
+        .profiles-table,
+        .backups-table,
+        .repositories-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        .profiles-table { min-width: 760px; }
+        .backups-table { min-width: 600px; }
+        .repositories-table { min-width: 560px; }
+
+        .profiles-table th,
+        .profiles-table td,
+        .backups-table th,
+        .backups-table td,
+        .repositories-table th,
+        .repositories-table td {
+            padding: 11px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-soft);
+            font-size: 13px;
+            vertical-align: middle;
+        }
+
+        .profiles-table th,
+        .backups-table th,
+        .repositories-table th {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--faint);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            background: var(--surface-2);
             white-space: nowrap;
         }
 
-        .btn-primary { background: var(--blue); color: white; }
-        .btn-primary:hover { background: var(--blue-2); }
+        .profiles-table th:first-child,
+        .backups-table th:first-child,
+        .repositories-table th:first-child { border-top-left-radius: var(--radius-sm); }
+        .profiles-table th:last-child,
+        .backups-table th:last-child,
+        .repositories-table th:last-child { border-top-right-radius: var(--radius-sm); }
 
-        .btn-success { background: var(--green); color: white; }
-        .btn-success:hover { background: var(--green-2); }
-
-        .btn-warning { background: var(--amber); color: #151515; }
-        .btn-warning:hover { background: #bf8422; }
-
-        .btn-danger { background: var(--red); color: white; }
-        .btn-danger:hover { background: #b93b3b; }
-
-        .btn-outline {
-            border: 1px solid var(--border);
-            color: #b8c8d8;
-            background: rgba(16, 20, 24, 0.2);
+        .profiles-table tbody tr:last-child td,
+        .backups-table tbody tr:last-child td,
+        .repositories-table tbody tr:last-child td {
+            border-bottom: none;
         }
 
-        body.theme-light .btn-outline {
-            background: #ffffff;
-            color: #273746;
+        .profiles-table tbody tr:hover td,
+        .backups-table tbody tr:hover td,
+        .repositories-table tbody tr:hover td {
+            background-color: var(--surface-2);
+        }
+
+        .cell-primary {
+            color: var(--text);
+            font-weight: 550;
+        }
+
+        .cell-secondary {
+            color: var(--faint);
+            font-size: 12px;
+            margin-top: 2px;
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .mono {
+            font-family: var(--mono);
+            font-size: 12px;
+        }
+
+        .backup-size {
+            font-family: var(--mono);
+            font-size: 12px;
+            white-space: nowrap;
+            color: var(--muted);
+        }
+
+        .backup-time {
+            white-space: nowrap;
+        }
+
+        .profile-type {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            white-space: nowrap;
+            background: var(--neutral-soft);
+            color: var(--muted);
+            border: 1px solid var(--neutral-line);
+        }
+
+        .type-postgresql { background: var(--blue-soft); color: var(--blue-text); border-color: var(--blue-line); }
+        .type-mongodb { background: var(--green-soft); color: var(--green-text); border-color: var(--green-line); }
+        .type-redis { background: var(--red-soft); color: var(--red-text); border-color: var(--red-line); }
+        .type-ssh-files { background: var(--violet-soft); color: var(--violet-text); border-color: var(--violet-line); }
+
+        .profile-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 9px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 550;
+            white-space: nowrap;
+        }
+
+        .profile-status::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .status-enabled { background: var(--green-soft); color: var(--green-text); }
+        .status-disabled { background: var(--neutral-soft); color: var(--faint); }
+
+        /* ---------- Buttons ---------- */
+        .btn-group {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            padding: 9px 15px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 550;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s, opacity 0.15s;
+            white-space: nowrap;
+            line-height: 1.2;
+        }
+
+        .btn-primary { background: var(--blue); color: #fff; box-shadow: 0 4px 14px rgba(79, 140, 255, 0.25); }
+        .btn-primary:hover { background: var(--blue-2); }
+
+        .btn-success { background: var(--green); color: #fff; box-shadow: 0 4px 14px rgba(34, 181, 115, 0.22); }
+        .btn-success:hover { background: var(--green-2); }
+
+        .btn-warning { background: var(--amber); color: #1b1305; }
+        .btn-warning:hover { filter: brightness(0.94); }
+
+        .btn-danger { background: var(--red); color: #fff; }
+        .btn-danger:hover { background: var(--red-2); }
+
+        .btn-outline {
+            border-color: var(--border);
+            color: var(--text);
+            background: var(--surface-2);
         }
 
         .btn-outline:hover {
             background: var(--surface-3);
-            color: white;
-            border-color: #4b6275;
+            border-color: var(--faint);
+        }
+
+        .btn-outline.btn-danger {
+            color: var(--red-text);
+            background: transparent;
+            border-color: var(--red-line);
+        }
+
+        .btn-outline.btn-danger:hover {
+            background: var(--red-soft);
+            border-color: var(--red);
+        }
+
+        .btn-verify {
+            color: var(--green-text);
+            background: var(--green-soft);
+            border-color: var(--green-line);
+        }
+
+        .btn-verify:hover {
+            border-color: var(--green);
+            background: var(--green-soft);
+            filter: brightness(1.08);
         }
 
         .btn-sm {
             padding: 5px 10px;
             font-size: 12px;
-            border-radius: 6px;
+            border-radius: 7px;
+            gap: 5px;
+        }
+
+        .btn-sm .icon {
+            width: 14px;
+            height: 14px;
+        }
+
+        .btn-icon {
+            padding: 5px 7px;
         }
 
         .btn:disabled,
         .btn.disabled {
-            opacity: 0.5;
+            opacity: 0.45;
             cursor: not-allowed;
+            box-shadow: none;
         }
 
-        .backups-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 16px;
-            min-width: 620px;
-        }
-
-        .backups-table th,
-        .backups-table td {
-            padding: 12px 14px;
-            text-align: left;
-            border-bottom: 1px solid var(--border-soft);
-            font-size: 13px;
-        }
-
-        .backups-table th {
-            font-weight: 600;
-            color: var(--muted);
-            text-transform: uppercase;
-            font-size: 11px;
-            background: rgba(16, 20, 24, 0.38);
-        }
-
-        .backups-table tbody tr:hover td {
-            background-color: rgba(36, 49, 61, 0.72);
-        }
-
-        .backup-size {
-            font-family: 'Monaco', 'Menlo', monospace;
-        }
-
+        /* ---------- Backups list ---------- */
         .backup-tags {
             display: flex;
             flex-wrap: wrap;
@@ -428,36 +644,53 @@
             background: var(--surface-3);
             color: var(--text);
             padding: 2px 6px;
-            border-radius: 3px;
+            border-radius: 4px;
             font-size: 11px;
         }
 
         .backup-filters {
-            display: flex;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 10px;
-            margin-bottom: 12px;
-            flex-wrap: wrap;
+            margin-bottom: 14px;
         }
 
-        .backup-filters select {
-            flex: 1;
-            min-width: 140px;
-            padding: 9px 10px;
-            border-radius: 6px;
-            background: #0f151b;
-            color: var(--text);
+        .backup-filters select,
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 9px 12px;
+            border-radius: var(--radius-sm);
             border: 1px solid var(--border);
+            background: var(--input-bg);
+            color: var(--text);
+            font-size: 13px;
+            transition: border-color 0.15s, box-shadow 0.15s;
         }
 
-        body.theme-light .backup-filters select {
-            background: #ffffff;
+        .backup-filters select:focus,
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--blue);
+            box-shadow: 0 0 0 3px var(--ring);
+        }
+
+        .form-group input[readonly],
+        .form-group textarea[readonly] {
+            color: var(--muted);
+            background: var(--surface-2);
+            font-family: var(--mono);
+            font-size: 12px;
         }
 
         .pagination-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-top: 12px;
+            margin-top: 14px;
             gap: 10px;
         }
 
@@ -466,6 +699,60 @@
             color: var(--muted);
         }
 
+        .health-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 9px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+            border: 1px solid var(--neutral-line);
+            background: var(--neutral-soft);
+            color: var(--faint);
+            cursor: default;
+        }
+
+        button.health-badge {
+            cursor: pointer;
+        }
+
+        button.health-badge:hover {
+            filter: brightness(1.12);
+        }
+
+        .health-badge .icon {
+            width: 13px;
+            height: 13px;
+            stroke-width: 2.6;
+        }
+
+        .health-passed { color: var(--green-text); background: var(--green-soft); border-color: var(--green-line); }
+        .health-warning,
+        .health-interrupted { color: var(--amber-text); background: var(--amber-soft); border-color: var(--amber-line); }
+        .health-failed { color: var(--red-text); background: var(--red-soft); border-color: var(--red-line); }
+        .health-running,
+        .health-queued { color: var(--blue-text); background: var(--blue-soft); border-color: var(--blue-line); }
+
+        .spinner,
+        .mini-spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid currentColor;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            flex-shrink: 0;
+            display: inline-block;
+        }
+
+        .mini-spinner {
+            width: 11px;
+            height: 11px;
+        }
+
+        /* ---------- Backup-now modal ---------- */
         .backup-form-layout {
             display: grid;
             gap: 16px;
@@ -474,13 +761,13 @@
         .backup-mode-row {
             display: grid;
             grid-template-columns: minmax(220px, 0.45fr) minmax(0, 1fr);
-            gap: 16px;
+            gap: 20px;
             align-items: start;
         }
 
         .profile-select-list {
             display: grid;
-            gap: 10px;
+            gap: 8px;
             max-height: 420px;
             overflow-y: auto;
             padding-right: 4px;
@@ -491,20 +778,22 @@
             grid-template-columns: 22px minmax(0, 1fr) auto;
             gap: 12px;
             align-items: center;
-            padding: 12px;
+            padding: 12px 14px;
             border: 1px solid var(--border);
-            border-radius: 8px;
-            background: #111820;
+            border-radius: var(--radius-sm);
+            background: var(--surface-2);
             cursor: pointer;
-        }
-
-        body.theme-light .profile-select-card {
-            background: #f8fbfd;
+            transition: border-color 0.15s, background 0.15s;
         }
 
         .profile-select-card:hover {
-            border-color: #4b6275;
-            background: var(--surface-2);
+            border-color: var(--blue-line);
+            background: var(--surface-3);
+        }
+
+        .profile-select-card:has(input:checked) {
+            border-color: var(--blue-line);
+            background: var(--blue-soft);
         }
 
         .profile-select-card input {
@@ -518,8 +807,9 @@
         }
 
         .profile-select-name {
+            display: block;
             color: var(--text);
-            font-weight: 650;
+            font-weight: 600;
             font-size: 14px;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -553,7 +843,7 @@
             display: flex;
             justify-content: flex-end;
             gap: 10px;
-            border-top: 1px solid var(--border);
+            border-top: 1px solid var(--border-soft);
             padding-top: 16px;
         }
 
@@ -561,46 +851,13 @@
             margin-top: 0;
         }
 
-        .repositories-table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 560px;
-        }
-
-        .repositories-table th,
-        .repositories-table td {
-            padding: 12px 14px;
-            text-align: left;
-            border-bottom: 1px solid var(--border-soft);
-            font-size: 13px;
-        }
-
-        .repositories-table th {
-            font-weight: 600;
-            color: var(--muted);
-            text-transform: uppercase;
-            font-size: 11px;
-            background: rgba(16, 20, 24, 0.38);
-        }
-
-        .repositories-table tbody tr:hover td {
-            background-color: rgba(36, 49, 61, 0.72);
-        }
-
-        body.theme-light .repositories-table th {
-            background: #f5f8fb;
-        }
-
-        body.theme-light .repositories-table tbody tr:hover td {
-            background-color: #eef4f8;
-        }
-
         .repo-path {
-            max-width: 520px;
+            max-width: 320px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            font-family: 'Monaco', 'Menlo', monospace;
+            font-family: var(--mono);
+            font-size: 12px;
             color: var(--muted);
         }
 
@@ -614,71 +871,88 @@
         .repository-form-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 16px 20px;
+            gap: 4px 20px;
             align-items: start;
         }
 
+        /* ---------- Modals ---------- */
         .modal-overlay {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.58);
+            inset: 0;
+            background: var(--overlay);
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
             display: none;
             align-items: center;
             justify-content: center;
             z-index: 1000;
+            padding: 24px;
+            animation: fade-in 0.15s ease-out;
         }
 
         .modal {
             background: var(--surface);
-            border-radius: 8px;
-            width: min(1180px, calc(100vw - 48px));
+            border-radius: 16px;
+            width: min(1180px, 100%);
             max-height: calc(100vh - 48px);
             overflow-y: auto;
             border: 1px solid var(--border);
+            box-shadow: var(--shadow-lg);
+            animation: pop-in 0.18s ease-out;
+        }
+
+        .modal-md {
+            width: min(860px, 100%);
         }
 
         .modal-header {
-            padding: 16px 20px;
-            border-bottom: 1px solid var(--border);
+            padding: 16px 22px;
+            border-bottom: 1px solid var(--border-soft);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 12px;
+            position: sticky;
+            top: 0;
+            background: var(--surface);
+            z-index: 2;
         }
 
         .modal-header h2 {
-            font-size: 18px;
-            font-weight: 600;
+            font-size: 17px;
+            font-weight: 650;
             color: var(--text);
         }
 
         .modal-header .btn-close {
             background: transparent;
             border: none;
-            font-size: 20px;
+            border-radius: 8px;
+            font-size: 22px;
+            line-height: 1;
             color: var(--muted);
             cursor: pointer;
-            width: 30px;
-            height: 30px;
+            width: 32px;
+            height: 32px;
             display: flex;
             align-items: center;
             justify-content: center;
+            flex-shrink: 0;
         }
 
         .modal-header .btn-close:hover {
             color: var(--text);
+            background: var(--surface-3);
         }
 
         .modal-body {
-            padding: 20px;
+            padding: 20px 22px 22px;
         }
 
         .profile-form-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 16px 20px;
+            gap: 4px 20px;
             align-items: start;
         }
 
@@ -689,7 +963,7 @@
         .type-fields {
             grid-column: 1 / -1;
             display: none;
-            border-top: 1px solid var(--border);
+            border-top: 1px solid var(--border-soft);
             padding-top: 18px;
             margin-top: 2px;
         }
@@ -697,7 +971,7 @@
         .type-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 16px 20px;
+            gap: 4px 20px;
         }
 
         .form-actions {
@@ -705,7 +979,7 @@
             display: flex;
             justify-content: flex-end;
             gap: 10px;
-            border-top: 1px solid var(--border);
+            border-top: 1px solid var(--border-soft);
             padding-top: 16px;
             margin-top: 4px;
         }
@@ -716,34 +990,10 @@
 
         .form-group label {
             display: block;
-            font-size: 13px;
+            font-size: 12px;
+            font-weight: 600;
             color: var(--muted);
             margin-bottom: 6px;
-        }
-
-        .form-group input,
-        .form-group select,
-        .form-group textarea {
-            width: 100%;
-            padding: 10px 14px;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-            background: #0f151b;
-            color: var(--text);
-            font-size: 14px;
-        }
-
-        body.theme-light .form-group input,
-        body.theme-light .form-group select,
-        body.theme-light .form-group textarea {
-            background: #ffffff;
-        }
-
-        .form-group input:focus,
-        .form-group select:focus,
-        .form-group textarea:focus {
-            outline: none;
-            border-color: var(--blue);
         }
 
         .form-group textarea {
@@ -754,13 +1004,16 @@
         .checkbox-group {
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-bottom: 16px;
+            gap: 9px;
+            margin-bottom: 14px;
+            color: var(--text);
+            font-size: 13px;
         }
 
         .checkbox-group input[type="checkbox"] {
             width: 16px;
             height: 16px;
+            accent-color: var(--blue);
         }
 
         .checkbox-group label {
@@ -777,7 +1030,7 @@
         .ssh-connection-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 16px;
+            gap: 0 16px;
         }
 
         .ssh-paths-header {
@@ -802,13 +1055,9 @@
 
         .ssh-path-item {
             border: 1px solid var(--border);
-            background: #111820;
-            border-radius: 8px;
+            background: var(--surface-2);
+            border-radius: var(--radius-sm);
             padding: 14px;
-        }
-
-        body.theme-light .ssh-path-item {
-            background: #f8fbfd;
         }
 
         .ssh-path-item-header {
@@ -820,7 +1069,7 @@
         }
 
         .ssh-path-item-title {
-            color: #cbd8e4;
+            color: var(--muted);
             font-size: 13px;
             font-weight: 600;
         }
@@ -829,6 +1078,10 @@
             display: grid;
             grid-template-columns: minmax(220px, 1fr) minmax(240px, 1fr);
             gap: 12px;
+        }
+
+        .ssh-path-grid .form-group {
+            margin-bottom: 0;
         }
 
         .ssh-path-grid textarea {
@@ -842,7 +1095,7 @@
             min-height: 40px;
             padding: 8px;
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: var(--radius-sm);
         }
 
         .tag-item {
@@ -874,54 +1127,36 @@
             outline: none;
         }
 
+        /* ---------- Banner, disk bar, empty states ---------- */
         .backup-banner {
             display: none;
             align-items: center;
             gap: 10px;
-            background: rgba(79, 140, 255, 0.12);
-            border: 1px solid rgba(79, 140, 255, 0.34);
-            color: #b6ceff;
-            padding: 12px 20px;
-            border-radius: 8px;
+            background: var(--blue-soft);
+            border: 1px solid var(--blue-line);
+            color: var(--blue-text);
+            padding: 12px 18px;
+            border-radius: var(--radius);
             margin-bottom: 20px;
+            font-weight: 550;
         }
 
         .backup-banner.active {
             display: flex;
         }
 
-        .backup-banner .spinner {
-            width: 14px;
-            height: 14px;
-            border: 2px solid var(--blue);
-            border-top-color: transparent;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            flex-shrink: 0;
-        }
-
-        .btn:disabled,
-        .btn.disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
         .disk-bar {
             width: 100%;
-            height: 8px;
-            background: #26333f;
-            border-radius: 4px;
+            height: 6px;
+            background: var(--surface-3);
+            border-radius: 999px;
             overflow: hidden;
-            margin-top: 8px;
-        }
-
-        body.theme-light .disk-bar {
-            background: #dfe7ee;
+            margin-top: 12px;
         }
 
         .disk-bar-fill {
             height: 100%;
-            border-radius: 4px;
+            border-radius: 999px;
             transition: width 0.5s;
         }
 
@@ -931,119 +1166,509 @@
 
         .empty-state {
             text-align: center;
-            padding: 40px;
+            padding: 36px 20px;
             color: var(--faint);
         }
 
         .empty-state h3 {
-            font-size: 18px;
-            margin-bottom: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 6px;
             color: var(--muted);
         }
 
         .empty-state p {
-            font-size: 14px;
+            font-size: 13px;
             color: var(--faint);
         }
 
+        tr:hover td.empty-state {
+            background: transparent !important;
+        }
+
+        /* ---------- Login ---------- */
         .login-container {
-            max-width: 400px;
-            margin: 0 auto;
-            padding: 40px 20px;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 32px 16px;
         }
 
         .login-card {
+            width: min(400px, 100%);
             background: var(--surface);
-            border-radius: 8px;
+            border-radius: 18px;
             padding: 32px;
-            border: 1px solid var(--border);
+            border: 1px solid var(--border-soft);
+            box-shadow: var(--shadow-lg);
         }
 
-        body.theme-light .login-card {
-            box-shadow: 0 18px 40px rgba(31, 45, 61, 0.10);
+        .login-brand {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .login-brand .brand-mark {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+        }
+
+        .login-brand .brand-mark .icon {
+            width: 26px;
+            height: 26px;
         }
 
         .login-card h2 {
-            text-align: center;
-            margin-bottom: 24px;
+            font-size: 20px;
+            letter-spacing: -0.01em;
             color: var(--text);
         }
 
+        .login-brand p {
+            color: var(--faint);
+            font-size: 13px;
+        }
+
         .login-form .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 16px;
         }
 
         .login-form .btn-primary {
             width: 100%;
-            padding: 12px;
-            font-size: 16px;
+            padding: 11px;
+            font-size: 14px;
+            font-weight: 600;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            margin-top: 4px;
+        }
+
+        .login-form .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: progress;
         }
 
         .login-error {
             margin-top: 12px;
-            color: #ff9b9b;
+            color: var(--red-text);
             text-align: center;
             min-height: 20px;
+            font-size: 13px;
+        }
+
+        .login-notice {
+            margin-bottom: 16px;
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            background: var(--amber-soft);
+            border: 1px solid var(--amber-line);
+            color: var(--amber-text);
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .login-notice:empty {
+            display: none;
+        }
+
+        /* ---------- Backup health check modal ---------- */
+        .verify-meta {
+            color: var(--faint);
+            font-size: 12px;
+            margin-top: 2px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .verify-hero {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 18px;
+            border-radius: var(--radius);
+            border: 1px solid var(--neutral-line);
+            background: var(--neutral-soft);
+            margin-bottom: 18px;
+        }
+
+        .verify-hero-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            flex-shrink: 0;
+            background: var(--surface);
+            border: 1px solid currentColor;
+        }
+
+        .verify-hero-icon .icon {
+            width: 22px;
+            height: 22px;
+            stroke-width: 2.4;
+        }
+
+        .verify-hero-icon .spinner {
+            width: 20px;
+            height: 20px;
+        }
+
+        .verify-hero h3 {
+            font-size: 16px;
+            font-weight: 650;
+            color: var(--text);
+        }
+
+        .verify-hero p {
+            color: var(--muted);
+            font-size: 13px;
+            margin-top: 2px;
+            word-break: break-word;
+        }
+
+        .verify-hero.is-passed { border-color: var(--green-line); background: var(--green-soft); color: var(--green-text); }
+        .verify-hero.is-warning,
+        .verify-hero.is-interrupted { border-color: var(--amber-line); background: var(--amber-soft); color: var(--amber-text); }
+        .verify-hero.is-failed { border-color: var(--red-line); background: var(--red-soft); color: var(--red-text); }
+        .verify-hero.is-running,
+        .verify-hero.is-queued { border-color: var(--blue-line); background: var(--blue-soft); color: var(--blue-text); }
+
+        .verify-progress {
+            height: 4px;
+            border-radius: 999px;
+            background: var(--surface-3);
+            overflow: hidden;
+            margin: -8px 0 18px;
+        }
+
+        .verify-progress-fill {
+            height: 100%;
+            width: 0;
+            background: linear-gradient(90deg, var(--blue), var(--cyan));
+            border-radius: 999px;
+            transition: width 0.4s ease;
+        }
+
+        .verify-steps {
+            list-style: none;
+            display: grid;
+            gap: 0;
+            position: relative;
+        }
+
+        .verify-step {
+            display: grid;
+            grid-template-columns: 30px minmax(0, 1fr) auto;
+            gap: 14px;
+            align-items: start;
+            padding: 10px 0;
+            position: relative;
+        }
+
+        .verify-step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            left: 14px;
+            top: 40px;
+            bottom: -2px;
+            width: 2px;
+            background: var(--border-soft);
+        }
+
+        .verify-step.is-passed:not(:last-child)::after {
+            background: var(--green-line);
+        }
+
+        .step-dot {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            font-size: 12px;
+            font-weight: 700;
+            border: 2px solid var(--border);
+            color: var(--faint);
+            background: var(--surface);
+            position: relative;
+            z-index: 1;
+        }
+
+        .step-dot .icon {
+            width: 15px;
+            height: 15px;
+            stroke-width: 2.8;
+        }
+
+        .is-running .step-dot { border-color: var(--blue); color: var(--blue-text); background: var(--blue-soft); }
+        .is-passed .step-dot { border-color: var(--green); color: #fff; background: var(--green); }
+        .is-warning .step-dot { border-color: var(--amber); color: #1b1305; background: var(--amber); }
+        .is-failed .step-dot { border-color: var(--red); color: #fff; background: var(--red); }
+        .is-skipped .step-dot { border-style: dashed; }
+
+        .step-label {
+            font-weight: 600;
+            color: var(--text);
+            padding-top: 5px;
+        }
+
+        .is-pending .step-label,
+        .is-skipped .step-label {
+            color: var(--faint);
+        }
+
+        .step-detail {
+            color: var(--muted);
+            font-size: 12.5px;
+            margin-top: 3px;
+            word-break: break-word;
+        }
+
+        .is-failed .step-detail { color: var(--red-text); }
+        .is-warning .step-detail { color: var(--amber-text); }
+
+        .step-time {
+            font-family: var(--mono);
+            font-size: 12px;
+            color: var(--faint);
+            padding-top: 7px;
+            white-space: nowrap;
+        }
+
+        .verify-section-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 10px;
+            margin: 20px 0 10px;
+            font-size: 13px;
+            font-weight: 650;
+            color: var(--text);
+        }
+
+        .verify-section-title span {
+            color: var(--faint);
+            font-weight: 500;
+            font-size: 12px;
+        }
+
+        .verify-archives {
+            border: 1px solid var(--border-soft);
+            border-radius: var(--radius-sm);
+            overflow: auto;
+            max-height: 300px;
+        }
+
+        .verify-archives table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 560px;
+        }
+
+        .verify-archives th,
+        .verify-archives td {
+            padding: 9px 12px;
+            border-bottom: 1px solid var(--border-soft);
+            font-size: 12.5px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .verify-archives th {
+            position: sticky;
+            top: 0;
+            background: var(--surface-2);
+            color: var(--faint);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .verify-archives tr:last-child td {
+            border-bottom: none;
+        }
+
+        .archive-path {
+            font-family: var(--mono);
+            font-size: 12px;
+            color: var(--text);
+            overflow-wrap: anywhere;
+        }
+
+        .profiles-table .btn-group,
+        .backups-table .btn-group,
+        .repositories-table .btn-group {
+            flex-wrap: nowrap;
+        }
+
+        .profiles-table .mono {
+            white-space: nowrap;
+        }
+
+        .verify-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            border-top: 1px solid var(--border-soft);
+            padding-top: 16px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .verify-actions .form-hint {
+            margin: 0;
+            flex: 1 1 320px;
+        }
+
+        .verify-actions .btn-group {
+            margin-left: auto;
         }
 
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
 
+        @keyframes fade-in {
+            from { opacity: 0; }
+        }
+
+        @keyframes pop-in {
+            from { opacity: 0; transform: translateY(8px) scale(0.985); }
+        }
+
+        @keyframes toast-in {
+            from { opacity: 0; transform: translateY(10px); }
+        }
+
+        /* ---------- Toast ---------- */
         .toast {
             position: fixed;
             bottom: 24px;
             right: 24px;
-            padding: 14px 20px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 500;
-            color: #fff;
+            max-width: min(440px, calc(100vw - 32px));
+            padding: 12px 16px 12px 14px;
+            border-radius: 11px;
+            font-size: 13px;
+            font-weight: 550;
+            color: var(--text);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--blue);
             z-index: 2000;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            box-shadow: var(--shadow-lg);
+            animation: toast-in 0.2s ease-out;
         }
 
-        .toast-success { background: var(--green-2); }
-        .toast-error { background: #b93b3b; }
-        .toast-info { background: var(--blue-2); }
+        .toast-success { border-left-color: var(--green); }
+        .toast-error { border-left-color: var(--red); }
+        .toast-info { border-left-color: var(--blue); }
+
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        @media (max-width: 1440px) {
+            .main-content { grid-template-columns: minmax(0, 1fr); }
+        }
 
         @media (max-width: 1024px) {
-            .stats-grid { grid-template-columns: repeat(2, 1fr); }
-            .main-content { grid-template-columns: 1fr; }
-            .side-column { grid-template-columns: 1fr; }
-            .container { padding: 20px; }
+            .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .profile-form-grid,
+            .repository-form-grid,
             .type-grid,
             .ssh-layout,
             .ssh-connection-grid,
             .ssh-path-grid,
             .backup-mode-row {
-                grid-template-columns: 1fr;
+                grid-template-columns: minmax(0, 1fr);
             }
         }
 
         @media (max-width: 640px) {
-            .stats-grid { grid-template-columns: 1fr; }
-            .header { padding: 16px 20px; }
-            .header h1 { font-size: 18px; }
-            .container { padding: 20px; }
+            .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+            .stat-card { padding: 14px; }
+            .stat-card .value { font-size: 22px; }
+            .stat-icon { display: none; }
+            .backup-filters { grid-template-columns: minmax(0, 1fr); }
+            .header { flex-wrap: wrap; padding: 10px 16px; }
+            .header .user-info { margin-left: 0; width: 100%; justify-content: space-between; }
+            .brand-sub { display: none; }
+            .container { padding: 16px 16px 40px; }
+            .card-header,
+            .card-body { padding-left: 14px; padding-right: 14px; }
+            .modal-overlay { padding: 0; align-items: flex-end; }
+            .modal { border-radius: 16px 16px 0 0; max-height: 92vh; }
+            .modal-body { padding: 16px; }
+            .verify-hero { padding: 14px; gap: 12px; }
+            .toast { left: 16px; right: 16px; bottom: 16px; }
         }
     </style>
 </head>
 <body>
+    <script>
+        // Apply the saved (or OS) theme before first paint to avoid a flash.
+        (function () {
+            let theme = null;
+            try { theme = localStorage.getItem('dashboardTheme'); } catch (e) {}
+            if (!theme) theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+            if (theme === 'light') document.body.classList.add('theme-light');
+        })();
+    </script>
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <symbol id="i-logo" viewBox="0 0 24 24"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+        <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+        <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+        <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+        <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+        <symbol id="i-play" viewBox="0 0 24 24"><path d="m6 4 14 8-14 8z"/></symbol>
+        <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></symbol>
+        <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 12c0 1.7 4 3 9 3s9-1.3 9-3"/></symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+        <symbol id="i-disk" viewBox="0 0 24 24"><path d="M22 12H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/><path d="M6 16h.01M10 16h.01"/></symbol>
+        <symbol id="i-pie" viewBox="0 0 24 24"><path d="M21.2 15.9A10 10 0 1 1 8 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></symbol>
+        <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+        <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+        <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
+        <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    </svg>
     <div id="auth-container">
         <!-- Login Screen -->
         <div id="login-screen" class="login-container">
             <div class="login-card">
-                <h2>Backup Dashboard</h2>
+                <div class="login-brand">
+                    <span class="brand-mark"><svg class="icon"><use href="#i-logo"/></svg></span>
+                    <div>
+                        <h2>Backupstic</h2>
+                        <p>Sign in to the backup dashboard</p>
+                    </div>
+                </div>
+                <div id="login-notice" class="login-notice"></div>
                 <form id="login-form" class="login-form">
                     <div class="form-group">
                         <label for="username">Username</label>
-                        <input type="text" id="username" placeholder="Enter username" required>
+                        <input type="text" id="username" placeholder="Enter username" autocomplete="username" required>
                     </div>
                     <div class="form-group">
                         <label for="password">Password</label>
-                        <input type="password" id="password" placeholder="Enter password" required>
+                        <input type="password" id="password" placeholder="Enter password" autocomplete="current-password" required>
                     </div>
                     <button type="submit" class="btn-primary" id="login-btn">Sign In</button>
                     <div id="login-error" class="login-error"></div>
@@ -1054,13 +1679,19 @@
         <!-- Main App (hidden initially) -->
         <div id="app-container" style="display: none;">
             <div class="header">
-                <h1>Backup Dashboard</h1>
-                <div class="user-info">
-                    <span id="username-display"></span>
-                    <button class="theme-toggle" id="themeToggle" type="button">Light</button>
-                    <button class="btn-logout" id="logout-btn">Logout</button>
+                <div class="brand">
+                    <span class="brand-mark"><svg class="icon"><use href="#i-logo"/></svg></span>
+                    <div>
+                        <h1>Backupstic</h1>
+                        <div class="brand-sub">Backup Dashboard</div>
+                    </div>
                 </div>
-                <span class="status-badge status-healthy" id="statusBadge">Loading...</span>
+                <div class="user-info">
+                    <span class="status-badge status-healthy" id="statusBadge">Loading...</span>
+                    <span class="user-chip" id="username-display"></span>
+                    <button class="theme-toggle" id="themeToggle" type="button">Light</button>
+                    <button class="btn-logout" id="logout-btn" type="button"><svg class="icon"><use href="#i-logout"/></svg><span>Logout</span></button>
+                </div>
             </div>
 
             <div class="container">
@@ -1073,21 +1704,25 @@
                 <!-- Stats -->
                 <div class="stats-grid">
                     <div class="stat-card">
+                        <span class="stat-icon"><svg class="icon"><use href="#i-layers"/></svg></span>
                         <div class="label">Total Profiles</div>
                         <div class="value" id="profileCount">-</div>
                         <div class="sub">configured backup profiles</div>
                     </div>
                     <div class="stat-card">
+                        <span class="stat-icon"><svg class="icon"><use href="#i-clock"/></svg></span>
                         <div class="label">Total Backups</div>
                         <div class="value" id="backupCount">-</div>
                         <div class="sub">successful backups</div>
                     </div>
                     <div class="stat-card">
+                        <span class="stat-icon"><svg class="icon"><use href="#i-disk"/></svg></span>
                         <div class="label">Disk Used</div>
                         <div class="value" id="diskUsed">-</div>
                         <div class="disk-bar"><div class="disk-bar-fill disk-ok" id="diskBar" style="width: 0%"></div></div>
                     </div>
                     <div class="stat-card">
+                        <span class="stat-icon"><svg class="icon"><use href="#i-pie"/></svg></span>
                         <div class="label">Disk Available</div>
                         <div class="value" id="diskAvail">-</div>
                         <div class="sub" id="diskPercent">-</div>
@@ -1099,10 +1734,10 @@
                     <!-- Profiles List -->
                     <div class="card">
                         <div class="card-header">
-                            <h2>Backup Profiles</h2>
+                            <h2><svg class="icon"><use href="#i-layers"/></svg>Backup Profiles</h2>
                             <div class="btn-group">
-                                <button class="btn btn-primary" id="addProfileBtn">New Profile</button>
-                                <button class="btn btn-success" id="backupNowBtn">Backup Now</button>
+                                <button class="btn btn-outline" id="addProfileBtn"><svg class="icon"><use href="#i-plus"/></svg>New Profile</button>
+                                <button class="btn btn-success" id="backupNowBtn"><svg class="icon"><use href="#i-play"/></svg>Backup Now</button>
                             </div>
                         </div>
                         <div class="card-body">
@@ -1129,8 +1764,8 @@
                         <!-- Backups List -->
                         <div class="card">
                             <div class="card-header">
-                                <h2>Recent Backups</h2>
-                                <button class="btn btn-sm btn-outline" id="refreshBackupsBtn">Refresh</button>
+                                <h2><svg class="icon"><use href="#i-clock"/></svg>Backups</h2>
+                                <button class="btn btn-sm btn-outline" id="refreshBackupsBtn"><svg class="icon"><use href="#i-refresh"/></svg>Refresh</button>
                             </div>
                             <div class="card-body">
                                 <div class="backup-filters">
@@ -1153,8 +1788,8 @@
                                         <tr>
                                             <th>Time</th>
                                             <th>Profile</th>
-                                            <th>Repository</th>
                                             <th>Size</th>
+                                            <th>Health</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
@@ -1172,8 +1807,8 @@
 
                         <div class="card repositories-card">
                             <div class="card-header">
-                                <h2>Restic Repositories</h2>
-                                <button class="btn btn-primary" id="addRepositoryBtn">New Repository</button>
+                                <h2><svg class="icon"><use href="#i-database"/></svg>Restic Repositories</h2>
+                                <button class="btn btn-sm btn-outline" id="addRepositoryBtn"><svg class="icon"><use href="#i-plus"/></svg>New Repository</button>
                             </div>
                             <div class="card-body">
                                 <table class="repositories-table">
@@ -1489,7 +2124,32 @@
         </div>
     </div>
 
-    <div id="toast" class="toast" style="display: none;"></div>
+    <div id="verifyModal" class="modal-overlay">
+        <div class="modal modal-md" role="dialog" aria-modal="true" aria-labelledby="verifyModalTitle">
+            <div class="modal-header">
+                <div>
+                    <h2 id="verifyModalTitle">Backup Health Check</h2>
+                    <div class="verify-meta" id="verifyMeta"></div>
+                </div>
+                <button class="btn-close" id="verifyModalClose" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="verify-hero" id="verifyHero"></div>
+                <div class="verify-progress" id="verifyProgressBar"><div class="verify-progress-fill" id="verifyProgress"></div></div>
+                <ol class="verify-steps" id="verifySteps"></ol>
+                <div id="verifyArchives"></div>
+                <div class="verify-actions">
+                    <p class="form-hint">Same path as restoring a download: restic restore → encrypted bundle → extract → decrypt with the repository password → test every archive. Temporary files are removed afterwards.</p>
+                    <div class="btn-group">
+                        <button class="btn btn-outline" id="verifyCloseBtn" type="button">Close</button>
+                        <button class="btn btn-primary" id="verifyRerunBtn" type="button"><svg class="icon"><use href="#i-shield"/></svg>Run again</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast" style="display: none;" role="status" aria-live="polite"></div>
 
     <script>
         const API = '';
@@ -1502,6 +2162,15 @@
         let backupPendingRefresh = false;
         let backupSeenRunning = false;
         let backupStartPollAt = 0;
+        let buttonsBusy = false;
+        let toastTimer = null;
+
+        // Backup health checks: latest result per full snapshot id.
+        let verifications = {};
+        let verifyModalSnapshotId = null;
+        let verifyPollHandle = null;
+        let verifyLastStep = null;
+        const VERIFY_ACTIVE = ['queued', 'running'];
 
         // Recent-backups view state (client-side filter + pagination)
         let backupsAll = [];
@@ -1535,13 +2204,46 @@
         }
 
         function logout() {
-            return fetch(`${API}/api/logout`, {
+            return apiFetch(`/api/logout`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${authToken}`
                 }
             });
+        }
+
+        // Authenticated API call. A 401 means the session expired: go back to
+        // the login screen instead of leaving every panel in an error state.
+        async function apiFetch(path, options = {}) {
+            const headers = { ...(options.headers || {}), 'Authorization': `Bearer ${getAuthToken()}` };
+            const res = await fetch(`${API}${path}`, { ...options, headers });
+            if (res.status === 401 && authToken) {
+                handleSessionExpired();
+            }
+            return res;
+        }
+
+        function handleSessionExpired() {
+            sessionStorage.removeItem('authToken');
+            authToken = null;
+            stopPolling();
+            ['profileModal', 'backupModal', 'repositoryModal', 'verifyModal'].forEach(id => {
+                document.getElementById(id).style.display = 'none';
+            });
+            document.getElementById('login-notice').textContent = 'Your session has expired. Please sign in again.';
+            showLogin();
+        }
+
+        function stopPolling() {
+            if (fastPollHandle) {
+                clearInterval(fastPollHandle);
+                fastPollHandle = null;
+            }
+            if (verifyPollHandle) {
+                clearInterval(verifyPollHandle);
+                verifyPollHandle = null;
+            }
         }
 
         function setAuthToken(token) {
@@ -1560,19 +2262,26 @@
             return !!getAuthToken();
         }
 
-        function applyTheme(theme) {
+        function applyTheme(theme, persist = true) {
             const selected = theme === 'light' ? 'light' : 'dark';
             document.body.classList.toggle('theme-light', selected === 'light');
-            localStorage.setItem('dashboardTheme', selected);
+            if (persist) {
+                try { localStorage.setItem('dashboardTheme', selected); } catch (e) {}
+            }
             const toggle = document.getElementById('themeToggle');
             if (toggle) {
-                toggle.textContent = selected === 'light' ? 'Dark' : 'Light';
+                toggle.innerHTML = selected === 'light'
+                    ? '<svg class="icon"><use href="#i-moon"/></svg><span>Dark</span>'
+                    : '<svg class="icon"><use href="#i-sun"/></svg><span>Light</span>';
                 toggle.setAttribute('aria-label', `Switch to ${selected === 'light' ? 'dark' : 'light'} theme`);
             }
         }
 
         function initTheme() {
-            applyTheme(localStorage.getItem('dashboardTheme') || 'dark');
+            let saved = null;
+            try { saved = localStorage.getItem('dashboardTheme'); } catch (e) {}
+            const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+            applyTheme(saved || (prefersLight ? 'light' : 'dark'), false);
         }
 
         function toggleTheme() {
@@ -1586,7 +2295,8 @@
             toast.textContent = message;
             toast.className = `toast toast-${type}`;
             toast.style.display = 'block';
-            setTimeout(() => toast.style.display = 'none', 4000);
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toast.style.display = 'none', type === 'error' ? 7000 : 4000);
         }
 
         // Format date
@@ -1603,7 +2313,7 @@
 
         // Profile type class
         function typeClass(type) {
-            const t = type.toLowerCase();
+            const t = String(type || '').toLowerCase();
             if (t.includes('postgresql') || t.includes('postgres')) return 'type-postgresql';
             if (t.includes('mongo')) return 'type-mongodb';
             if (t.includes('redis')) return 'type-redis';
@@ -1627,20 +2337,21 @@
         }
 
         // Status class
+        // Profiles without an explicit flag are enabled, as on the server.
         function statusClass(enabled) {
-            return enabled ? 'status-enabled' : 'status-disabled';
+            return enabled !== false ? 'status-enabled' : 'status-disabled';
         }
 
         // Status text
         function statusText(enabled) {
-            return enabled ? 'Enabled' : 'Disabled';
+            return enabled !== false ? 'Enabled' : 'Disabled';
         }
 
         // Load profile checkboxes for backup modal
         function loadProfileCheckboxes() {
             const container = document.getElementById('profileCheckboxes');
             container.innerHTML = '';
-            const enabledProfiles = profiles.filter(profile => profile.enabled);
+            const enabledProfiles = profiles.filter(profile => profile.enabled !== false);
 
             if (enabledProfiles.length === 0) {
                 container.innerHTML = '<div class="empty-state"><h3>No enabled profiles</h3></div>';
@@ -1672,7 +2383,7 @@
 
             const checkboxes = Array.from(list.querySelectorAll('input[type="checkbox"]'));
             const selectedCount = checkboxes.filter(cb => cb.checked).length;
-            const allEnabledCount = profiles.filter(profile => profile.enabled).length;
+            const allEnabledCount = profiles.filter(profile => profile.enabled !== false).length;
             const useAll = mode === 'all-enabled';
 
             list.classList.toggle('disabled', useAll);
@@ -1689,7 +2400,7 @@
             const field = document.getElementById('sshPublicKey');
             field.value = '';
             try {
-                const res = await fetch(`${API}/api/config-backup/public-key`, {
+                const res = await apiFetch(`/api/config-backup/public-key`, {
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 const data = await res.json();
@@ -1808,10 +2519,11 @@
         // Load status
         async function loadStatus() {
             try {
-                const res = await fetch(`${API}/api/status`, {
+                const res = await apiFetch(`/api/status`, {
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Status unavailable');
 
                 document.getElementById('diskUsed').textContent = data.disk.used;
                 document.getElementById('diskAvail').textContent = data.disk.available;
@@ -1835,23 +2547,27 @@
         // Load profiles
         async function loadProfiles() {
             try {
-                const res = await fetch(`${API}/api/profiles`, {
+                const res = await apiFetch(`/api/profiles`, {
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 const data = await res.json();
                 
-                profiles = data.profiles;
+                if (!data.success) throw new Error(data.error || 'Failed to load profiles');
+                profiles = data.profiles || [];
                 document.getElementById('profileCount').textContent = profiles.length;
                 
                 const tbody = document.getElementById('profilesTableBody');
                 if (profiles.length > 0) {
                     tbody.innerHTML = profiles.map(p => `
                         <tr>
-                            <td>${escapeHtml(p.name || 'Unnamed')}</td>
-                            <td><span class="profile-type ${typeClass(p.type)}">${typeLabel(p.type)}</span></td>
+                            <td>
+                                <div class="cell-primary">${escapeHtml(p.name || 'Unnamed')}</div>
+                                ${p.description ? `<div class="cell-secondary">${escapeHtml(p.description)}</div>` : ''}
+                            </td>
+                            <td><span class="profile-type ${typeClass(p.type)}">${escapeHtml(typeLabel(p.type))}</span></td>
                             <td>${escapeHtml(repositoryName(p.repository_id))}</td>
                             <td>${p.max_backups > 0 ? escapeHtml(p.max_backups) : 'Global'}</td>
-                            <td>${escapeHtml(p.schedule || 'Not set')}</td>
+                            <td><span class="mono">${escapeHtml(p.schedule || 'Not set')}</span></td>
                             <td><span class="profile-status ${statusClass(p.enabled)}">${statusText(p.enabled)}</span></td>
                             <td>
                                 <div class="btn-group">
@@ -1874,7 +2590,7 @@
 
         async function loadRepositories() {
             try {
-                const res = await fetch(`${API}/api/restic-repositories`, {
+                const res = await apiFetch(`/api/restic-repositories`, {
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 const data = await res.json();
@@ -2052,7 +2768,7 @@
             }
 
             try {
-                const res = await fetch(`${API}/api/restic-repositories${isEdit ? '/' + repoId : ''}`, {
+                const res = await apiFetch(`/api/restic-repositories${isEdit ? '/' + repoId : ''}`, {
                     method: isEdit ? 'PUT' : 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -2076,7 +2792,7 @@
         async function checkRepository(id) {
             showToast('Checking repository...', 'info');
             try {
-                const res = await fetch(`${API}/api/restic-repositories/${id}/check`, {
+                const res = await apiFetch(`/api/restic-repositories/${id}/check`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
@@ -2091,7 +2807,7 @@
             if (!confirm('Initialize this Restic repository if needed?')) return;
             showToast('Initializing repository...', 'info');
             try {
-                const res = await fetch(`${API}/api/restic-repositories/${id}/init`, {
+                const res = await apiFetch(`/api/restic-repositories/${id}/init`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
@@ -2105,7 +2821,7 @@
         async function deleteRepository(id) {
             if (!confirm('Delete this repository definition? Restic snapshots are not removed.')) return;
             try {
-                const res = await fetch(`${API}/api/restic-repositories/${id}`, {
+                const res = await apiFetch(`/api/restic-repositories/${id}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
@@ -2126,7 +2842,7 @@
         // current page through the active filters.
         async function loadBackups() {
             try {
-                const res = await fetch(`${API}/api/snapshots?active_profiles_only=1&respect_retention=1&_=${Date.now()}`, {
+                const res = await apiFetch(`/api/snapshots?active_profiles_only=1&respect_retention=1&_=${Date.now()}`, {
                     cache: 'no-store',
                     headers: {
                         'Authorization': `Bearer ${getAuthToken()}`,
@@ -2208,18 +2924,27 @@
             if (pageItems.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><h3>No matching backups</h3></td></tr>';
             } else {
+                const verifyBusy = !!activeVerification();
                 tbody.innerHTML = pageItems.map(snap => {
                     const formattedTime = new Date(snap.time).toLocaleString();
+                    const sid = escapeHtml(snap.id);
                     return `
                         <tr>
-                            <td>${formattedTime}</td>
-                            <td>${escapeHtml(snapProfileName(snap))}</td>
-                            <td>${escapeHtml(snapRepositoryName(snap))}</td>
+                            <td class="backup-time">
+                                <div class="cell-primary">${formattedTime}</div>
+                                <div class="cell-secondary mono">${shortId(snap.id)}</div>
+                            </td>
+                            <td>
+                                <div class="cell-primary">${escapeHtml(snapProfileName(snap))}</div>
+                                <div class="cell-secondary">${escapeHtml(snapRepositoryName(snap))}</div>
+                            </td>
                             <td class="backup-size">${formatBytes(snap.size || 0)}</td>
+                            <td>${healthBadge(snap)}</td>
                             <td>
                                 <div class="btn-group">
-                                    <button class="btn btn-sm btn-outline" onclick="downloadBackup('${shortId(snap.id)}')">Download</button>
-                                    <button class="btn btn-sm btn-outline btn-danger" onclick="deleteBackup('${shortId(snap.id)}')">Delete</button>
+                                    <button class="btn btn-sm btn-verify" onclick="verifyBackup('${sid}')" ${verifyBusy ? 'disabled title="Another health check is running"' : 'title="Restore, decrypt and test this backup"'}><svg class="icon"><use href="#i-shield"/></svg>Verify</button>
+                                    <button class="btn btn-sm btn-outline btn-icon" onclick="downloadBackup('${shortId(snap.id)}')" title="Download encrypted bundle" aria-label="Download"><svg class="icon"><use href="#i-download"/></svg></button>
+                                    <button class="btn btn-sm btn-outline btn-danger btn-icon" onclick="deleteBackup('${shortId(snap.id)}')" title="Delete backup" aria-label="Delete"><svg class="icon"><use href="#i-trash"/></svg></button>
                                 </div>
                             </td>
                         </tr>
@@ -2235,7 +2960,8 @@
 
         // Format bytes
         function formatBytes(bytes) {
-            if (bytes === 0) return '0 Bytes';
+            bytes = Number(bytes) || 0;
+            if (bytes <= 0) return '0 Bytes';
             const k = 1024;
             const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -2250,7 +2976,7 @@
         async function loadBackupStatus() {
             let stillRunning = false;
             try {
-                const res = await fetch(`${API}/api/backup-status`, {
+                const res = await apiFetch(`/api/backup-status`, {
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 const data = await res.json();
@@ -2264,7 +2990,11 @@
                 if (stillRunning) {
                     const mode = data.mode || 'backup';
                     const started = data.started_at ? formatDate(data.started_at) : '';
-                    text.textContent = `Backup running: ${mode}${started ? ' (started ' + started + ')' : ''}`;
+                    if (data.kind === 'verify' || String(mode).startsWith('verify:')) {
+                        text.textContent = `Health check is restoring backup ${String(mode).replace(/^verify:/, '')} from Restic — scheduled backups wait until this step finishes`;
+                    } else {
+                        text.textContent = `Backup running: ${mode}${started ? ' (started ' + started + ')' : ''}`;
+                    }
                     banner.classList.add('active');
                 } else {
                     banner.classList.remove('active');
@@ -2289,13 +3019,9 @@
             }
             backupRunning = stillRunning;
 
-            // Update button states
+            // Lock the dashboard actions while the backup lock is held.
             if (!isModalOpen()) {
-                const isRunning = stillRunning;
-                document.querySelectorAll('.btn:not(.btn-close):not(.btn-logout)').forEach(btn => {
-                    btn.disabled = isRunning;
-                    btn.classList.toggle('disabled', isRunning);
-                });
+                setBusyButtons(stillRunning);
             }
 
             // Stop fast-polling once backup is done
@@ -2303,6 +3029,27 @@
                 clearInterval(fastPollHandle);
                 fastPollHandle = null;
             }
+        }
+
+        // Disable dashboard buttons while busy, remembering which ones we
+        // touched so buttons that were already disabled (pagination ends,
+        // the default repository's Delete) stay disabled afterwards.
+        function setBusyButtons(busy) {
+            // While busy, re-apply on every poll so freshly rendered rows lock too.
+            if (!busy && !buttonsBusy) return;
+            buttonsBusy = busy;
+            document.querySelectorAll('#app-container .btn').forEach(btn => {
+                if (busy && !btn.disabled) {
+                    btn.disabled = true;
+                    btn.dataset.busyDisabled = '1';
+                    btn.classList.add('disabled');
+                } else if (!busy && btn.dataset.busyDisabled) {
+                    btn.disabled = false;
+                    delete btn.dataset.busyDisabled;
+                    btn.classList.remove('disabled');
+                }
+            });
+            if (!busy && backupsAll.length) renderBackups();
         }
 
         // Add profile
@@ -2369,7 +3116,7 @@
             if (!confirm('Delete this profile? Existing restic snapshots will be preserved.')) return;
             
             try {
-                const res = await fetch(`${API}/api/profiles/${id}`, {
+                const res = await apiFetch(`/api/profiles/${id}`, {
                     method: 'DELETE',
                     headers: { 
                         'Content-Type': 'application/json',
@@ -2496,7 +3243,7 @@
             try {
                 let res;
                 if (isEdit) {
-                    res = await fetch(`${API}/api/profiles/${profileId}`, {
+                    res = await apiFetch(`/api/profiles/${profileId}`, {
                         method: 'PUT',
                         headers: { 
                             'Content-Type': 'application/json',
@@ -2505,7 +3252,7 @@
                         body: JSON.stringify(profileData)
                     });
                 } else {
-                    res = await fetch(`${API}/api/profiles`, {
+                    res = await apiFetch(`/api/profiles`, {
                         method: 'POST',
                         headers: { 
                             'Content-Type': 'application/json',
@@ -2600,7 +3347,7 @@
             }
             
             try {
-                const res = await fetch(`${API}/api/backup`, {
+                const res = await apiFetch(`/api/backup`, {
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
@@ -2642,7 +3389,7 @@
         async function downloadBackup(id) {
             showToast('Preparing download… restoring the snapshot may take a while', 'info');
             try {
-                const res = await fetch(`${API}/api/backup/${id}/download`, {
+                const res = await apiFetch(`/api/backup/${id}/download`, {
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 if (!res.ok) {
@@ -2671,7 +3418,7 @@
             if (!confirm('Are you sure you want to delete this backup?')) return;
             
             try {
-                const res = await fetch(`${API}/api/backup/${id}`, {
+                const res = await apiFetch(`/api/backup/${id}`, {
                     method: 'DELETE',
                     headers: { 
                         'Content-Type': 'application/json',
@@ -2691,6 +3438,313 @@
             }
         }
 
+        // ==================== Backup health checks ====================
+
+        const VERIFY_STATUS = {
+            queued: { label: 'Queued', icon: null },
+            running: { label: 'Checking…', icon: null },
+            passed: { label: 'Healthy', icon: 'check' },
+            warning: { label: 'Warnings', icon: 'alert' },
+            failed: { label: 'Failed', icon: 'x' },
+            interrupted: { label: 'Interrupted', icon: 'alert' }
+        };
+
+        function svgIcon(name) {
+            return `<svg class="icon"><use href="#i-${name}"/></svg>`;
+        }
+
+        function activeVerification() {
+            return Object.values(verifications).find(v => VERIFY_ACTIVE.includes(v.status)) || null;
+        }
+
+        function relativeTime(iso) {
+            if (!iso) return '';
+            const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+            if (seconds < 60) return 'just now';
+            if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+            if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
+            return `${Math.floor(seconds / 86400)} days ago`;
+        }
+
+        function formatDuration(ms) {
+            if (ms === null || ms === undefined) return '';
+            if (ms < 1000) return `${ms} ms`;
+            if (ms < 60000) return `${(ms / 1000).toFixed(1)} s`;
+            return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
+        }
+
+        function healthBadge(snap) {
+            const v = verifications[snap.id];
+            if (!v) {
+                return '<span class="health-badge" title="This backup has not been verified yet">Not checked</span>';
+            }
+            const meta = VERIFY_STATUS[v.status] || { label: v.status, icon: null };
+            const icon = meta.icon ? svgIcon(meta.icon) : (VERIFY_ACTIVE.includes(v.status) ? '<span class="mini-spinner"></span>' : '');
+            const when = v.finished_at ? `Checked ${relativeTime(v.finished_at)}` : `Started ${relativeTime(v.started_at)}`;
+            return `<button type="button" class="health-badge health-${escapeHtml(v.status)}" onclick="openVerification('${escapeHtml(snap.id)}')" title="${escapeHtml(when)} — click for the report">${icon}${escapeHtml(meta.label)}</button>`;
+        }
+
+        async function loadVerifications() {
+            try {
+                const res = await apiFetch('/api/verifications');
+                const data = await res.json();
+                if (!data.success) return;
+                verifications = data.verifications || {};
+                if (backupsAll.length) renderBackups();
+                if (activeVerification()) startVerifyPolling();
+            } catch (e) {
+                // Health badges are optional; the backups list still works.
+            }
+        }
+
+        async function verifyBackup(snapshotId) {
+            const snap = backupsAll.find(item => item.id === snapshotId);
+            const size = snap && snap.size ? ` (${formatBytes(snap.size)})` : '';
+            if (!confirm(
+                `Run a health check on backup ${shortId(snapshotId)}${size}?\n\n` +
+                'The snapshot is restored from Restic, packed into the encrypted download bundle, extracted, ' +
+                'opened with the repository password, and every archive inside is tested ' +
+                '(PostgreSQL dumps are also test-restored when a verification server is configured).\n\n' +
+                'It needs temporary disk space of about 3× the backup size and may take a while for large backups.'
+            )) return;
+
+            try {
+                const res = await apiFetch(`/api/backup/${encodeURIComponent(snapshotId)}/verify`, { method: 'POST' });
+                const data = await res.json();
+                if (data.verification) {
+                    verifications[data.verification.snapshot_id] = data.verification;
+                }
+                if (!data.success) {
+                    showToast(`Error: ${data.error}`, 'error');
+                    if (res.status === 409 && data.verification) openVerification(data.verification.snapshot_id);
+                    return;
+                }
+                showToast('Health check started', 'info');
+                verifyLastStep = null;
+                renderBackups();
+                openVerification(data.verification.snapshot_id, data.verification);
+                startVerifyPolling();
+            } catch (e) {
+                showToast('Failed to start health check', 'error');
+            }
+        }
+
+        async function openVerification(snapshotId, state = null) {
+            verifyModalSnapshotId = snapshotId;
+            document.getElementById('verifyModal').style.display = 'flex';
+            if (state && state.steps) {
+                renderVerifyModal(state);
+                return;
+            }
+            const cached = verifications[snapshotId];
+            if (cached && cached.steps) renderVerifyModal(cached);
+            else renderVerifyModal({ status: 'queued', steps: [], short_id: shortId(snapshotId), snapshot_id: snapshotId });
+            await refreshVerification(snapshotId);
+        }
+
+        function closeVerifyModal() {
+            verifyModalSnapshotId = null;
+            document.getElementById('verifyModal').style.display = 'none';
+        }
+
+        async function refreshVerification(snapshotId) {
+            try {
+                const res = await apiFetch(`/api/backup/${encodeURIComponent(snapshotId)}/verify`);
+                if (res.status === 404) return null;
+                const data = await res.json();
+                if (!data.success) return null;
+                const state = data.verification;
+                const previous = verifications[state.snapshot_id];
+                verifications[state.snapshot_id] = state;
+                if (verifyModalSnapshotId === state.snapshot_id) renderVerifyModal(state);
+                if (!previous || previous.status !== state.status) renderBackups();
+                return state;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function startVerifyPolling() {
+            if (verifyPollHandle) return;
+            verifyPollHandle = setInterval(pollVerification, 1500);
+        }
+
+        async function pollVerification() {
+            const active = activeVerification();
+            if (!active) {
+                clearInterval(verifyPollHandle);
+                verifyPollHandle = null;
+                return;
+            }
+            const state = await refreshVerification(active.snapshot_id);
+            if (!state) return;
+            if (state.current_step !== verifyLastStep) {
+                // The restore step holds the backup lock; keep the banner in sync.
+                verifyLastStep = state.current_step;
+                loadBackupStatus();
+            }
+            if (!VERIFY_ACTIVE.includes(state.status)) {
+                clearInterval(verifyPollHandle);
+                verifyPollHandle = null;
+                verifyLastStep = null;
+                const name = `Backup ${state.short_id}`;
+                if (state.status === 'passed') showToast(`${name} is healthy`, 'success');
+                else if (state.status === 'warning') showToast(`${name} passed with warnings`, 'info');
+                else showToast(`${name} failed the health check`, 'error');
+                renderBackups();
+                loadBackupStatus();
+            }
+        }
+
+        function renderVerifyModal(state) {
+            const status = state.status || 'queued';
+            const steps = state.steps || [];
+            const total = steps.length || 6;
+            const runningIndex = steps.findIndex(step => step.status === 'running');
+            const finished = !VERIFY_ACTIVE.includes(status);
+
+            const meta = [
+                state.profile_name,
+                state.short_id,
+                state.snapshot_time ? formatDate(state.snapshot_time) : '',
+                state.repository_name
+            ].filter(Boolean).map(escapeHtml);
+            document.getElementById('verifyMeta').innerHTML = meta.map(item => `<span>${item}</span>`).join('<span>·</span>');
+
+            const elapsed = state.started_at && state.finished_at
+                ? formatDuration(new Date(state.finished_at) - new Date(state.started_at)) : '';
+            const summary = state.summary || {};
+            let heroIcon = '<span class="spinner"></span>';
+            let title = 'Starting health check…';
+            let text = 'Waiting for the job to start';
+            if (status === 'running') {
+                const step = steps[runningIndex] || {};
+                title = `Step ${runningIndex + 1} of ${total} — ${step.label || 'Working'}`;
+                text = step.detail || 'Working…';
+            } else if (status === 'passed') {
+                heroIcon = svgIcon('check');
+                title = 'Backup is healthy';
+                const ran = steps.filter(step => step.status !== 'skipped').length;
+                const skipped = total - ran;
+                text = `All ${ran} checks passed${skipped ? ` (${skipped} not applicable)` : ''}${elapsed ? ' in ' + elapsed : ''}` +
+                    (summary.files ? ` · ${summary.files} ${summary.files === 1 ? 'file' : 'files'}, ${formatBytes(summary.bytes)} verified` : '');
+            } else if (status === 'warning') {
+                heroIcon = svgIcon('alert');
+                title = 'Backup restores, with warnings';
+                text = 'The backup can be restored, but some checks reported warnings. Review them below.';
+            } else if (status === 'failed') {
+                heroIcon = svgIcon('x');
+                title = 'Backup failed the health check';
+                text = state.error || 'One of the checks failed.';
+            } else if (status === 'interrupted') {
+                heroIcon = svgIcon('alert');
+                title = 'Health check interrupted';
+                text = state.error || 'The check did not finish. Run it again.';
+            }
+            const hero = document.getElementById('verifyHero');
+            hero.className = `verify-hero is-${status}`;
+            hero.innerHTML = `
+                <div class="verify-hero-icon">${heroIcon}</div>
+                <div>
+                    <h3>${escapeHtml(title)}</h3>
+                    <p>${escapeHtml(text)}</p>
+                </div>
+            `;
+
+            const done = steps.filter(step => !['pending', 'running'].includes(step.status)).length;
+            const progress = finished ? 100 : Math.round(((done + (runningIndex >= 0 ? 0.5 : 0)) / total) * 100);
+            document.getElementById('verifyProgressBar').style.display = finished ? 'none' : 'block';
+            document.getElementById('verifyProgress').style.width = `${progress}%`;
+
+            document.getElementById('verifySteps').innerHTML = steps.map((step, index) => {
+                const icons = { passed: svgIcon('check'), warning: svgIcon('alert'), failed: svgIcon('x'), skipped: svgIcon('minus') };
+                const dot = step.status === 'running' ? '<span class="mini-spinner"></span>' : (icons[step.status] || index + 1);
+                const detail = step.status === 'skipped' && !step.detail ? 'Skipped because an earlier step failed' : step.detail;
+                return `
+                    <li class="verify-step is-${escapeHtml(step.status)}">
+                        <span class="step-dot">${dot}</span>
+                        <div>
+                            <div class="step-label">${escapeHtml(step.label)}</div>
+                            ${detail ? `<div class="step-detail">${escapeHtml(detail)}</div>` : ''}
+                        </div>
+                        <span class="step-time">${formatDuration(step.duration_ms)}</span>
+                    </li>
+                `;
+            }).join('');
+
+            const pgResults = state.postgres || [];
+            const pgHtml = pgResults.length ? `
+                <div class="verify-section-title">
+                    PostgreSQL restore test
+                    <span>${escapeHtml(summary.postgres_version ? 'PostgreSQL ' + summary.postgres_version : '')}</span>
+                </div>
+                <div class="verify-archives">
+                    <table>
+                        <thead><tr><th>Dump</th><th>Databases</th><th>Tables</th><th>Rows</th><th>Result</th></tr></thead>
+                        <tbody>
+                            ${pgResults.map(item => {
+                                const meta = VERIFY_STATUS[item.status] || { label: item.status, icon: null };
+                                const errors = (item.errors || []).map(e => `<div class="step-detail">${escapeHtml(e)}</div>`).join('');
+                                return `
+                                    <tr>
+                                        <td class="archive-path">${escapeHtml(item.path)}</td>
+                                        <td>${Number(item.databases || 0)}</td>
+                                        <td>${Number(item.tables || 0)}</td>
+                                        <td class="backup-size">~${Number(item.rows || 0).toLocaleString()}</td>
+                                        <td>
+                                            <span class="health-badge health-${escapeHtml(item.status)}">${meta.icon ? svgIcon(meta.icon) : ''}${escapeHtml(item.status === 'passed' ? 'Restored' : meta.label)}</span>
+                                            <div class="step-detail">${escapeHtml(item.detail)}</div>
+                                            ${errors}
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            ` : '';
+
+            const archives = state.archives || [];
+            const archivesEl = document.getElementById('verifyArchives');
+            if (archives.length) {
+                const shown = summary.archives_total > archives.length ? ` · showing ${archives.length}` : '';
+                archivesEl.innerHTML = pgHtml + `
+                    <div class="verify-section-title">
+                        Archives tested
+                        <span>${summary.archives_passed || 0} ok · ${summary.archives_warning || 0} warnings · ${summary.archives_failed || 0} failed${shown}</span>
+                    </div>
+                    <div class="verify-archives">
+                        <table>
+                            <thead><tr><th>File</th><th>Format</th><th>Size</th><th>Result</th></tr></thead>
+                            <tbody>
+                                ${archives.map(item => {
+                                    const meta = VERIFY_STATUS[item.status] || { label: item.status, icon: null };
+                                    return `
+                                        <tr>
+                                            <td class="archive-path">${escapeHtml(item.path)}</td>
+                                            <td>${escapeHtml(item.format)}</td>
+                                            <td class="backup-size">${formatBytes(item.size)}</td>
+                                            <td>
+                                                <span class="health-badge health-${escapeHtml(item.status)}">${meta.icon ? svgIcon(meta.icon) : ''}${escapeHtml(item.status === 'passed' ? 'OK' : meta.label)}</span>
+                                                <div class="step-detail">${escapeHtml(item.detail)}</div>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } else {
+                archivesEl.innerHTML = pgHtml;
+            }
+
+            const rerun = document.getElementById('verifyRerunBtn');
+            const otherActive = activeVerification();
+            rerun.disabled = !finished || (!!otherActive && otherActive.snapshot_id !== state.snapshot_id);
+            rerun.dataset.snapshotId = state.snapshot_id || '';
+        }
+
         // Initialize app
         async function initApp() {
             // Check for existing token
@@ -2698,7 +3752,7 @@
             if (token) {
                 try {
                     // Validate token
-                    const res = await fetch(`${API}/api/validate-token`, {
+                    const res = await apiFetch(`/api/validate-token`, {
                         method: 'POST',
                         headers: { 
                             'Content-Type': 'application/json',
@@ -2707,6 +3761,8 @@
                     });
                     
                     if (res.ok) {
+                        const data = await res.json();
+                        document.getElementById('username-display').textContent = data.user || '';
                         showApp();
                         loadAllData();
                         return;
@@ -2733,7 +3789,7 @@
         }
 
         function isModalOpen() {
-            return ['profileModal', 'backupModal', 'repositoryModal'].some(id => {
+            return ['profileModal', 'backupModal', 'repositoryModal', 'verifyModal'].some(id => {
                 const modal = document.getElementById(id);
                 return modal && modal.style.display === 'flex';
             });
@@ -2744,8 +3800,10 @@
             await Promise.all([
                 loadStatus(),
                 loadProfiles(),
-                loadBackups()
+                loadBackups(),
+                loadVerifications()
             ]);
+            loadBackupStatus();
         }
 
         // Handle form submissions
@@ -2762,6 +3820,9 @@
                 const data = await res.json();
                 
                 if (data.success) {
+                    document.getElementById('login-notice').textContent = '';
+                    document.getElementById('login-error').textContent = '';
+                    document.getElementById('password').value = '';
                     setAuthToken(data.token);
                     document.getElementById('username-display').textContent = data.user;
                     showApp();
@@ -2785,6 +3846,7 @@
             }
             sessionStorage.removeItem('authToken');
             authToken = null;
+            stopPolling();
             showLogin();
         });
 
@@ -2834,6 +3896,22 @@
             startBackup();
         });
 
+        // Health check modal events
+        document.getElementById('verifyModalClose').addEventListener('click', closeVerifyModal);
+        document.getElementById('verifyCloseBtn').addEventListener('click', closeVerifyModal);
+        document.getElementById('verifyRerunBtn').addEventListener('click', (e) => {
+            const snapshotId = e.currentTarget.dataset.snapshotId;
+            if (snapshotId) verifyBackup(snapshotId);
+        });
+        document.getElementById('verifyModal').addEventListener('click', (e) => {
+            if (e.target.id === 'verifyModal') closeVerifyModal();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape') return;
+            if (document.getElementById('verifyModal').style.display === 'flex') closeVerifyModal();
+            else if (document.getElementById('backupModal').style.display === 'flex') cancelBackup();
+        });
+
         // Profile buttons
         document.getElementById('addProfileBtn').addEventListener('click', addProfile);
         document.getElementById('backupNowBtn').addEventListener('click', backupNow);
@@ -2866,6 +3944,7 @@
                 loadProfiles();
                 loadBackupStatus();
                 loadBackups();
+                loadVerifications();
             }
         }, 30000);
     </script>

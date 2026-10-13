@@ -638,6 +638,18 @@ Response when running:
 }
 ```
 
+وقتی یک Health Check در مرحله restore است، همین قفل را نگه می‌دارد تا backupهای زمان‌بندی‌شده و prune با آن تداخل نکنند. در این حالت پاسخ این شکل است (فیلد `kind` جدید و اختیاری است):
+
+```json
+{
+  "running": true,
+  "mode": "verify:1a2b3c4d",
+  "kind": "verify",
+  "started_at": "2026-10-13T10:22:40+03:30",
+  "pid": 123
+}
+```
+
 ## Snapshots And Backups
 
 ### List Snapshots
@@ -769,6 +781,79 @@ Response:
   "message": "Backup deleted successfully"
 }
 ```
+
+### Verify Backup (Health Check)
+
+سلامت یک backup را end-to-end بررسی می‌کند؛ دقیقاً همان مسیری که کاربر بعد از دانلود طی می‌کند:
+
+1. `restore` — restore کردن snapshot از مخزن Restic
+2. `package` — ساخت همان bundle رمزنگاری‌شده‌ای که دانلود برمی‌گرداند
+3. `extract` — باز کردن `tar.gz`
+4. `decrypt` — باز کردن مخزن با password (و اطمینان از اینکه password اشتباه رد می‌شود) و restore محتوا
+5. `compare` — مقایسه SHA-256 همه فایل‌ها با restore اول
+6. `archives` — تست کامل همه archiveهای داخل backup (`.gz`, `.tar.gz`, `.tgz`, `.tar`, `.zip`, `.bz2`, `.xz`, `.json`, `.rdb`, `.sql`)؛ برای dump PostgreSQL وجود marker پایان dump چک می‌شود و فایل‌های RDB ردیس با `redis-check-rdb` (ساختار و checksum) بررسی می‌شوند
+7. `postgres` — restore واقعی هر dump پستگرس روی یک PostgreSQL موقت و اختصاصی (`VERIFY_POSTGRES_URL`). هر دیتابیس در یک دیتابیس موقت `backupstic_verify_*` restore و بعد حذف می‌شود. اگر تنظیم نشده باشد یا dump پستگرسی وجود نداشته باشد، status این step برابر `skipped` است و روی نتیجه کلی اثری ندارد
+
+کار در background اجرا می‌شود و فقط یک verification هم‌زمان مجاز است. حدود ۳ برابر حجم backup فضای موقت لازم دارد و فایل‌های موقت در پایان پاک می‌شوند.
+
+```http
+POST /api/backup/{backup_id}/verify
+```
+
+`backup_id` می‌تواند short id (۸ کاراکتر) یا full id باشد. Response با status `202`:
+
+```json
+{
+  "success": true,
+  "verification": {
+    "id": "uuid",
+    "snapshot_id": "full-snapshot-id",
+    "short_id": "1a2b3c4d",
+    "status": "queued",
+    "current_step": null,
+    "steps": [
+      {"key": "restore", "label": "Restore snapshot from Restic", "status": "pending", "detail": "", "duration_ms": null}
+    ],
+    "archives": [],
+    "summary": {}
+  }
+}
+```
+
+خطاها: `400` برای id نامعتبر، `404` اگر snapshot پیدا نشود، `409` اگر verification دیگری در حال اجرا باشد (در این حالت `verification` همان job در حال اجرا است).
+
+```http
+GET /api/backup/{backup_id}/verify
+```
+
+آخرین نتیجه verification این snapshot (برای polling هر ۱-۲ ثانیه). مقدار `status` یکی از این‌هاست:
+
+```text
+queued | running | passed | warning | failed | interrupted
+```
+
+مقدار `status` هر step یکی از `pending | running | passed | warning | failed | skipped` است. `archives` لیست فایل‌های تست‌شده با `path`, `format`, `size`, `status`, `detail` است. `postgres` (در صورت اجرا) لیست dumpها با `path`, `status`, `detail`, `databases`, `tables`, `rows`, `errors` است. `summary` شامل `postgres_version` و `files`, `bytes`, `archives_total`, `archives_passed`, `archives_warning`, `archives_failed` می‌شود. اگر dashboard وسط کار restart شود، status به `interrupted` تغییر می‌کند.
+
+```http
+GET /api/verifications
+```
+
+آخرین نتیجه (خلاصه) برای همه snapshotهایی که چک شده‌اند، با کلید full snapshot id:
+
+```json
+{
+  "success": true,
+  "verifications": {
+    "full-snapshot-id": {"status": "passed", "started_at": "...", "finished_at": "...", "error": "", "summary": {}}
+  }
+}
+```
+
+متغیرهای محیطی اختیاری:
+
+- `VERIFY_LOCK_WAIT_SECONDS` (پیش‌فرض `3600`): مرحله restore حداکثر چقدر منتظر تمام شدن backup در حال اجرا بماند.
+- `VERIFY_POSTGRES_URL`: آدرس PostgreSQL موقت و اختصاصی برای step هفتم (با `./init.sh --with-postgres-verify` ساخته می‌شود؛ هرگز سرور دارای داده واقعی را اینجا قرار ندهید).
+- `VERIFY_POSTGRES_TIMEOUT` (پیش‌فرض `7200`): حداکثر زمان restore هر dump به ثانیه.
 
 ## Logs And Scheduling
 

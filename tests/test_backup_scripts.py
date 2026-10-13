@@ -103,6 +103,9 @@ class BackupScriptIntegrationTests(unittest.TestCase):
             self._executable(
                 fake_bin / 'jq',
                 '#!/bin/sh\n'
+                # Drain stdin like real jq; otherwise the writer can hit SIGPIPE
+                # and pipefail makes monitor.sh exit 141 at random.
+                'cat >/dev/null\n'
                 'case "$1" in\n'
                 '  length) printf "0\\n" ;;\n'
                 '  *) printf "null\\n" ;;\n'

@@ -8,7 +8,10 @@ import datetime
 import fcntl
 import shutil
 import tempfile
+import threading
+import time
 from collections import deque
+from contextlib import contextmanager
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory, send_file, after_this_request
 
@@ -36,6 +39,15 @@ from schedules import (
     valid_cron_expression,
     write_schedule_file,
 )
+from postgres_verify import PostgresRestoreTester
+from verification import (
+    SNAPSHOT_ID_RE,
+    Verification,
+    VerificationStore,
+    cleanup_stale_work_dirs,
+    new_state as new_verification_state,
+    summarize as summarize_verification,
+)
 
 app = Flask(__name__, static_folder='static')
 app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('MAX_REQUEST_BYTES', 1048576))
@@ -58,6 +70,10 @@ CONFIG_BACKUP_SSH_PUBLIC_KEY_FILE = os.environ.get(
 )
 CONFIG_BACKUP_SSH_PUBLIC_KEY = os.environ.get('CONFIG_BACKUP_SSH_PUBLIC_KEY', '')
 SSH_CONNECT_TIMEOUT = int(os.environ.get('CONFIG_BACKUP_SSH_CONNECT_TIMEOUT', 10))
+VERIFY_LOCK_WAIT_SECONDS = max(0, int(os.environ.get('VERIFY_LOCK_WAIT_SECONDS', 3600)))
+# Optional dedicated PostgreSQL server used to test-restore SQL dumps.
+VERIFY_POSTGRES_URL = os.environ.get('VERIFY_POSTGRES_URL', '').strip()
+VERIFY_POSTGRES_TIMEOUT = max(60, int(os.environ.get('VERIFY_POSTGRES_TIMEOUT', 7200)))
 MANUAL_BACKUP_LOG_MAX_BYTES = max(
     1,
     int(os.environ.get('MANUAL_BACKUP_LOG_MAX_BYTES', 10 * 1024 * 1024)),
@@ -198,12 +214,13 @@ def restic_lock_error(result):
 def unlock_restic_repository(repo):
     return run_restic_command(['unlock'], repo=repo, timeout=120)
 
-def run_restic_command_with_stale_lock_retry(args, repo=None, timeout=300):
+def run_restic_command_with_stale_lock_retry(args, repo=None, timeout=300, backup_lock_held=False):
     result = run_restic_command(args, repo=repo, timeout=timeout)
     if result['success'] or not restic_lock_error(result):
         return result
 
-    running, _ = app_backup_state()
+    # Holding the backup lock ourselves proves no backup owns the restic lock.
+    running = False if backup_lock_held else app_backup_state()[0]
     if running:
         result['stderr'] = 'Restic repository is locked because a backup is currently running'
         return result
@@ -236,7 +253,8 @@ def init_restic_repository(repo):
 def all_repositories():
     return get_repository_storage().get_all()
 
-def find_snapshot_repository(snapshot_id):
+def find_snapshot(snapshot_id):
+    """Return (repository, snapshot) for a full or short snapshot id."""
     for repo in all_repositories():
         res = run_restic_command_with_stale_lock_retry(['snapshots', '--json'], repo=repo, timeout=60)
         if not res['success'] or not res['stdout']:
@@ -248,8 +266,53 @@ def find_snapshot_repository(snapshot_id):
         for snap in snapshots:
             sid = snap.get('id', '')
             if sid == snapshot_id or sid.startswith(snapshot_id):
-                return repo
-    return None
+                return repo, snap
+    return None, None
+
+def find_snapshot_repository(snapshot_id):
+    return find_snapshot(snapshot_id)[0]
+
+@contextmanager
+def backup_lock(mode, wait_seconds, on_wait=None):
+    """Hold the global backup lock so scheduled backups/prunes queue behind us.
+
+    Publishes backup.state like backup-all.sh does, so the dashboard banner and
+    /api/backup-status explain why the lock is busy.
+    """
+    os.makedirs(BACKUP_BASE, exist_ok=True)
+    lock_file = os.path.join(BACKUP_BASE, 'backup.lock')
+    state_file = os.path.join(BACKUP_BASE, 'backup.state')
+    fd = os.open(lock_file, os.O_CREAT | os.O_RDWR)
+    locked = False
+    try:
+        deadline = time.monotonic() + wait_seconds
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                locked = True
+                break
+            except BlockingIOError:
+                if on_wait:
+                    on_wait()
+                    on_wait = None
+                if time.monotonic() >= deadline:
+                    raise TimeoutError('Timed out waiting for the running backup to finish')
+                time.sleep(2)
+        with open(state_file, 'w') as f:
+            json.dump({
+                'mode': mode,
+                'kind': 'verify',
+                'started_at': datetime.datetime.now().astimezone().isoformat(),
+                'pid': os.getpid(),
+            }, f)
+        yield
+    finally:
+        if locked:
+            try:
+                os.unlink(state_file)
+            except OSError:
+                pass
+        os.close(fd)
 
 def get_profile_repository(profile):
     repo_id = profile.get('repository_id') or 'default'
@@ -894,53 +957,47 @@ def list_backups():
 @token_required
 def delete_backup(backup_id):
     """Delete a backup snapshot"""
-    repo = find_snapshot_repository(backup_id)
+    repo, snap = find_snapshot(backup_id)
     if repo is None:
         return jsonify({'success': False, 'error': 'Snapshot not found'}), 404
     result = run_restic_command_with_stale_lock_retry(['forget', backup_id, '--prune'], repo=repo, timeout=600)
     if result['success']:
+        verification_store().delete(snap.get('id', ''))
         return jsonify({'success': True, 'message': 'Backup deleted successfully'})
     return jsonify({'success': False, 'error': result['stderr']})
 
-@app.route('/api/backup/<backup_id>/download')
-@token_required
-def download_backup(backup_id):
-    """Return an encrypted restic repository bundle for the requested snapshot."""
-    repo = find_snapshot_repository(backup_id)
-    if repo is None:
-        return jsonify({'success': False, 'error': 'Snapshot not found'}), 404
+def restore_snapshot(backup_id, repo, target, backup_lock_held=False):
+    return run_restic_command_with_stale_lock_retry(
+        ['restore', backup_id, '--target', target],
+        repo=repo,
+        timeout=1800,
+        backup_lock_held=backup_lock_held,
+    )
 
-    work = tempfile.mkdtemp(prefix='restore_', dir=BACKUP_BASE)
-    restore_dir = os.path.join(work, 'data')
+def package_encrypted_bundle(backup_id, repo, work, restore_dir):
+    """Wrap restored files in a password-protected restic repository tarball.
+
+    This is the exact artifact users download, so backup verification builds
+    it through this function too. Returns (archive_path, error).
+    """
     encrypted_repo = os.path.join(work, 'encrypted-restic-repo')
     readme = os.path.join(work, 'README_DECRYPT.txt')
     archive = os.path.join(work, f'backup_{backup_id[:8]}.restic.tar.gz')
-
-    def cleanup():
-        shutil.rmtree(work, ignore_errors=True)
-
-    res = run_restic_command_with_stale_lock_retry(['restore', backup_id, '--target', restore_dir], repo=repo, timeout=1800)
-    if not res['success']:
-        cleanup()
-        return jsonify({'success': False, 'error': res['stderr'] or 'Restore failed'}), 500
-
     export_repo = {
         'repository': encrypted_repo,
         'password': repo.get('password', RESTIC_PASSWORD),
     }
-    init_res = run_restic_command(['init'], repo=export_repo, timeout=120)
+    init_res = run_restic_command(['init', '--no-cache'], repo=export_repo, timeout=120)
     if not init_res['success']:
-        cleanup()
-        return jsonify({'success': False, 'error': init_res['stderr'] or 'Failed to initialize encrypted export'}), 500
+        return None, init_res['stderr'] or 'Failed to initialize encrypted export'
 
     backup_res = run_restic_command(
-        ['backup', restore_dir, '--tag', 'encrypted-download', '--tag', backup_id[:8]],
+        ['backup', '--no-cache', restore_dir, '--tag', 'encrypted-download', '--tag', backup_id[:8]],
         repo=export_repo,
         timeout=1800,
     )
     if not backup_res['success']:
-        cleanup()
-        return jsonify({'success': False, 'error': backup_res['stderr'] or 'Failed to build encrypted export'}), 500
+        return None, backup_res['stderr'] or 'Failed to build encrypted export'
 
     with open(readme, 'w') as f:
         f.write(
@@ -964,8 +1021,34 @@ def download_backup(backup_id):
         tar_result = subprocess.CompletedProcess(args=[], returncode=-1, stdout='', stderr='Command timed out')
 
     if tar_result.returncode != 0 or not os.path.exists(archive):
+        return None, tar_result.stderr or 'Failed to package encrypted export'
+    # The tarball now holds the repository; free the disk space early.
+    shutil.rmtree(encrypted_repo, ignore_errors=True)
+    return archive, ''
+
+@app.route('/api/backup/<backup_id>/download')
+@token_required
+def download_backup(backup_id):
+    """Return an encrypted restic repository bundle for the requested snapshot."""
+    repo = find_snapshot_repository(backup_id)
+    if repo is None:
+        return jsonify({'success': False, 'error': 'Snapshot not found'}), 404
+
+    work = tempfile.mkdtemp(prefix='restore_', dir=BACKUP_BASE)
+    restore_dir = os.path.join(work, 'data')
+
+    def cleanup():
+        shutil.rmtree(work, ignore_errors=True)
+
+    res = restore_snapshot(backup_id, repo, restore_dir)
+    if not res['success']:
         cleanup()
-        return jsonify({'success': False, 'error': tar_result.stderr or 'Failed to package encrypted export'}), 500
+        return jsonify({'success': False, 'error': res['stderr'] or 'Restore failed'}), 500
+
+    archive, error = package_encrypted_bundle(backup_id, repo, work, restore_dir)
+    if error:
+        cleanup()
+        return jsonify({'success': False, 'error': error}), 500
 
     @after_this_request
     def _remove(response):
@@ -978,6 +1061,110 @@ def download_backup(backup_id):
         download_name=f'backup_{backup_id[:8]}.restic.tar.gz',
         mimetype='application/gzip'
     )
+
+# ==================== BACKUP VERIFICATION ENDPOINTS ====================
+
+def verification_store():
+    return VerificationStore(BACKUP_BASE)
+
+def open_bundle_repository(args, repo_path, timeout, password, wrong_password=False):
+    bundle_repo = {
+        'repository': repo_path,
+        'password': os.urandom(16).hex() if wrong_password else password,
+    }
+    return run_restic_command(['--no-cache', *args], repo=bundle_repo, timeout=timeout)
+
+def run_verification_job(store, lock_fd, state, snap, repo):
+    try:
+        snapshot_id = state['snapshot_id']
+        cleanup_stale_work_dirs(BACKUP_BASE)
+        store.prune_history()
+        password = repo.get('password', RESTIC_PASSWORD)
+        Verification(
+            store,
+            state,
+            work_base=BACKUP_BASE,
+            expected_size=snap.get('size', 0),
+            restore=lambda target: restore_snapshot(snapshot_id, repo, target, backup_lock_held=True),
+            package=lambda work, restore_dir: package_encrypted_bundle(snapshot_id, repo, work, restore_dir),
+            open_repo=lambda args, path, timeout, wrong_password=False: open_bundle_repository(
+                args, path, timeout, password, wrong_password=wrong_password,
+            ),
+            backup_lock=lambda on_wait: backup_lock(
+                f'verify:{state["short_id"]}', VERIFY_LOCK_WAIT_SECONDS, on_wait=on_wait,
+            ),
+            postgres_tester=(
+                (lambda: PostgresRestoreTester(VERIFY_POSTGRES_URL, BACKUP_BASE, timeout=VERIFY_POSTGRES_TIMEOUT))
+                if VERIFY_POSTGRES_URL else None
+            ),
+        ).run()
+    except Exception as exc:
+        app.logger.exception('Backup verification crashed')
+        state.update(status='failed', error=f'Unexpected error: {exc}', finished_at=datetime.datetime.now(datetime.timezone.utc).isoformat())
+        try:
+            store.save(state)
+        except Exception:
+            pass
+    finally:
+        VerificationStore.release(lock_fd)
+
+@app.route('/api/backup/<backup_id>/verify', methods=['POST'])
+@token_required
+def start_backup_verification(backup_id):
+    """Start a background health check of one snapshot (restore -> bundle -> extract -> decrypt -> test)."""
+    if not SNAPSHOT_ID_RE.fullmatch(backup_id):
+        return jsonify({'success': False, 'error': 'Invalid snapshot id'}), 400
+    repo, snap = find_snapshot(backup_id)
+    if repo is None:
+        return jsonify({'success': False, 'error': 'Snapshot not found'}), 404
+
+    store = verification_store()
+    lock_fd = store.try_acquire()
+    if lock_fd is None:
+        running = store.running()
+        return jsonify({
+            'success': False,
+            'error': 'Another backup verification is already running',
+            'verification': running,
+        }), 409
+
+    try:
+        snap['repository_id'] = repo.get('id')
+        snap['size'] = snapshot_size(snap)
+        snap = (apply_profile_snapshot_policy([snap]) or [snap])[0]
+        state = new_verification_state(snap, repo, requested_by=getattr(request, 'current_user', ''))
+        store.save(state)
+        # Serialize before the job thread starts mutating state.
+        response = jsonify({'success': True, 'verification': state})
+        threading.Thread(
+            target=run_verification_job,
+            args=(store, lock_fd, state, snap, repo),
+            name=f'verify-{state["short_id"]}',
+            daemon=True,
+        ).start()
+    except Exception:
+        VerificationStore.release(lock_fd)
+        raise
+    return response, 202
+
+@app.route('/api/backup/<backup_id>/verify', methods=['GET'])
+@token_required
+def get_backup_verification(backup_id):
+    """Latest verification result for a snapshot (full or short id)."""
+    state = verification_store().find(backup_id)
+    if state is None:
+        return jsonify({'success': False, 'error': 'No verification found for this backup'}), 404
+    return jsonify({'success': True, 'verification': state})
+
+@app.route('/api/verifications')
+@token_required
+def list_backup_verifications():
+    """Latest verification summary for every snapshot that has been checked."""
+    states = verification_store().all()
+    return jsonify({
+        'success': True,
+        'verifications': {s['snapshot_id']: summarize_verification(s) for s in states},
+    })
 
 # ==================== LOGS AND SCHEDULING ENDPOINTS ====================
 

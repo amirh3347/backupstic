@@ -18,6 +18,8 @@ health information.
 - Scheduled jobs through a dedicated cron container
 - SSH host-key verification and key/password authentication
 - Health checks, retention policies, monitoring reports, and a responsive UI
+- One-click backup verification: restore, decrypt, and test every archive inside a snapshot;
+  optionally restore PostgreSQL dumps into a scratch server and check Redis RDB files with `redis-check-rdb`
 
 ## Requirements
 

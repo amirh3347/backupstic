@@ -84,9 +84,34 @@ services:
           sleep "$${MONITOR_INTERVAL_SECONDS:-3600}"
         done
 
+  # Optional scratch PostgreSQL used by backup health checks to test-restore
+  # SQL dumps. Starts only when the "verify-postgres" profile is enabled
+  # (COMPOSE_PROFILES=verify-postgres in .env). It must stay dedicated:
+  # restores create and drop databases and roles here. No port is published.
+  verify-postgres:
+    image: postgres:18-alpine
+    container_name: backupstic-verify-postgres
+    profiles: ["verify-postgres"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${VERIFY_POSTGRES_PASSWORD:-}
+    volumes:
+      - verify-pgdata:/var/lib/postgresql
+    networks:
+      - backup-net
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
 volumes:
   backup-data:
     name: backupstic-data
+  verify-pgdata:
+    name: backupstic-verify-pgdata
 
 networks:
   backup-net:
