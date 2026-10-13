@@ -3778,7 +3778,8 @@
 
         function showLogin() {
             document.getElementById('auth-container').style.display = 'block';
-            document.getElementById('login-screen').style.display = 'block';
+            // Clear the inline style so the stylesheet's centered grid applies.
+            document.getElementById('login-screen').style.display = '';
             document.getElementById('app-container').style.display = 'none';
         }
 
