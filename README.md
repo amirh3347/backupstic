@@ -23,6 +23,7 @@ health information.
 - Optional automatic health check after every backup, per profile
 - Two download formats: the encrypted restic bundle, or a ready-to-use gzip of the backup
   files themselves (no restic, no wrapper folders) after confirming the repository password
+- One-time download links that work without a login (e.g. `curl` on another server)
 
 ## Requirements
 

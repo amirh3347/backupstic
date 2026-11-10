@@ -786,6 +786,48 @@ snapshot روی سرور restore و decrypt می‌شود و خود فایل‌�
 
 خطاها: `400` اگر password خالی یا id نامعتبر باشد، `403` برای password اشتباه (با فیلد `attempts_left`)، `404` اگر snapshot پیدا نشود، `429` بعد از `PLAIN_DOWNLOAD_MAX_FAILURES` (پیش‌فرض `5`) password اشتباه در `PLAIN_DOWNLOAD_FAILURE_WINDOW` ثانیه (پیش‌فرض `300`) با header `Retry-After`، `507` اگر فضای دیسک کافی نباشد.
 
+### One-Time Download Link
+
+فایل روی سرور در background آماده می‌شود و یک لینک یک‌بارمصرف برمی‌گردد که بدون login کار می‌کند (مثلاً با `curl` روی یک سرور دیگر). مرورگر فایل را مستقیم و stream شده دانلود می‌کند (بدون نگه داشتن کل فایل در حافظه).
+
+```http
+POST /api/backup/{backup_id}/download-link
+Content-Type: application/json
+
+{"format": "plain", "password": "<restic repository password>"}
+```
+
+`format` یکی از `plain` (همان خروجی Download Plain Backup؛ `password` الزامی) یا `encrypted` (bundle رمزنگاری‌شده Restic؛ بدون password) است. Response با status `202`:
+
+```json
+{
+  "success": true,
+  "url": "/dl/<token>",
+  "ttl_seconds": 3600,
+  "link": {"id": "<job id>", "status": "preparing", "format": "plain", "short_id": "1a2b3c4d", "filename": "", "size": 0, "expires_at": null}
+}
+```
+
+`token` فقط در همین response برمی‌گردد و روی دیسک ذخیره نمی‌شود (`id` همان SHA-256 توکن است).
+
+```http
+GET /api/download-links/{id}      # وضعیت: preparing | ready | claimed | failed
+DELETE /api/download-links/{id}   # لغو لینک و حذف فایل
+```
+
+استفاده از لینک (بدون header احراز هویت):
+
+```http
+GET  /dl/{token}   # صفحه دانلود؛ لینک را مصرف نمی‌کند (preview اپ‌های چت لینک را نمی‌سوزاند)
+POST /dl/{token}   # دانلود فایل؛ فقط یک بار
+```
+
+```bash
+curl -fOJ -X POST 'https://backup.example.com/dl/<token>'
+```
+
+بعد از اولین `POST` فایل از سرور حذف می‌شود و درخواست‌های بعدی `410` (already used) می‌گیرند. لینک `DOWNLOAD_LINK_TTL_SECONDS` ثانیه (پیش‌فرض `3600`) بعد از آماده شدن منقضی می‌شود. حداکثر `DOWNLOAD_LINK_MAX_PREPARING` (پیش‌فرض `2`) لینک هم‌زمان در حال آماده‌سازی مجاز است (`429`). اگر dashboard وسط آماده‌سازی restart شود، لینک `failed` می‌شود. محدودیت password اشتباه و خطاهای `400/403/404/429/507` مثل Download Plain Backup است.
+
 ### Delete Backup Snapshot
 
 ```http

@@ -7,6 +7,7 @@ import subprocess
 import datetime
 import fcntl
 import hmac
+import html
 import shutil
 import tempfile
 import threading
@@ -42,6 +43,11 @@ from schedules import (
 )
 from postgres_verify import PostgresRestoreTester
 import plain_export
+from download_links import (
+    DownloadLinkStore,
+    job_id_for as download_job_id_for,
+    public_state as public_download_state,
+)
 from verification import (
     SNAPSHOT_ID_RE,
     Verification,
@@ -83,6 +89,12 @@ AUTO_VERIFY_POLL_SECONDS = max(0, int(os.environ.get('AUTO_VERIFY_POLL_SECONDS',
 # Wrong repository passwords allowed per user and window for plain downloads.
 PLAIN_DOWNLOAD_MAX_FAILURES = max(1, int(os.environ.get('PLAIN_DOWNLOAD_MAX_FAILURES', 5)))
 PLAIN_DOWNLOAD_FAILURE_WINDOW = max(1, int(os.environ.get('PLAIN_DOWNLOAD_FAILURE_WINDOW', 300)))
+# One-time download links: lifetime once the file is ready, how many may be
+# prepared at once (each needs 2-3x the backup size on disk), and when a job
+# whose worker died is given up.
+DOWNLOAD_LINK_TTL_SECONDS = max(60, int(os.environ.get('DOWNLOAD_LINK_TTL_SECONDS', 3600)))
+DOWNLOAD_LINK_MAX_PREPARING = max(1, int(os.environ.get('DOWNLOAD_LINK_MAX_PREPARING', 2)))
+DOWNLOAD_LINK_PREPARE_TIMEOUT = max(600, int(os.environ.get('DOWNLOAD_LINK_PREPARE_TIMEOUT', 6 * 3600)))
 MANUAL_BACKUP_LOG_MAX_BYTES = max(
     1,
     int(os.environ.get('MANUAL_BACKUP_LOG_MAX_BYTES', 10 * 1024 * 1024)),
@@ -150,7 +162,7 @@ def security_headers(response):
         "default-src 'self'; style-src 'self' 'unsafe-inline'; "
         "script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'"
     )
-    if request.path.startswith('/api/'):
+    if request.path.startswith(('/api/', '/dl/')):
         response.headers['Cache-Control'] = 'no-store'
     return response
 
@@ -1082,6 +1094,13 @@ def download_backup(backup_id):
 _plain_download_failures = {}
 _plain_download_failures_lock = threading.Lock()
 
+class DownloadError(Exception):
+    """Preparing a download failed; `status` is the HTTP status to report."""
+
+    def __init__(self, message, status=500):
+        super().__init__(message)
+        self.status = status
+
 def _plain_download_recent_failures(key, now):
     """Drop expired failures for `key`; caller holds the lock."""
     recent = [t for t in _plain_download_failures.get(key, []) if now - t < PLAIN_DOWNLOAD_FAILURE_WINDOW]
@@ -1091,84 +1110,122 @@ def _plain_download_recent_failures(key, now):
         _plain_download_failures.pop(key, None)
     return recent
 
+def password_lockout_response(user):
+    """429 response while `user` has too many recent wrong passwords, else None."""
+    now = time.monotonic()
+    with _plain_download_failures_lock:
+        recent = _plain_download_recent_failures(user, now)
+        if len(recent) < PLAIN_DOWNLOAD_MAX_FAILURES:
+            return None
+        retry_after = int(PLAIN_DOWNLOAD_FAILURE_WINDOW - (now - recent[0])) + 1
+    response = jsonify({
+        'success': False,
+        'error': f'Too many wrong passwords. Try again in {retry_after} seconds.',
+    })
+    response.headers['Retry-After'] = str(retry_after)
+    return response, 429
+
+def repository_password_error(repo, password, user, snapshot_id):
+    """403 response when `password` is not the repository's password, else None.
+
+    Unencrypted exports leave restic's protection, so a dashboard session alone
+    is not enough to take data out in the clear.
+    """
+    now = time.monotonic()
+    expected = repo.get('password', RESTIC_PASSWORD) or ''
+    if expected and hmac.compare_digest(password.encode(), expected.encode()):
+        with _plain_download_failures_lock:
+            _plain_download_failures.pop(user, None)
+        return None
+    with _plain_download_failures_lock:
+        recent = _plain_download_recent_failures(user, now)
+        recent.append(now)
+        _plain_download_failures[user] = recent
+        attempts_left = max(0, PLAIN_DOWNLOAD_MAX_FAILURES - len(recent))
+    app.logger.warning('Rejected plain download of %s: wrong repository password', snapshot_id[:8])
+    return jsonify({
+        'success': False,
+        'error': 'Wrong repository password',
+        'attempts_left': attempts_left,
+    }), 403
+
+def download_disk_space_error(snap, factor):
+    size = snapshot_size(snap)
+    if not size:
+        return ''
+    needed = size * factor + 64 * 1024 * 1024
+    free = shutil.disk_usage(BACKUP_BASE).free
+    if free >= needed:
+        return ''
+    return (f'Not enough free disk space: needs about {format_bytes(needed)}, '
+            f'only {format_bytes(free)} is available')
+
+def build_download(fmt, snap, repo, work):
+    """Restore `snap` into `work` and package it. Returns (file_path, download_name)."""
+    os.makedirs(work, exist_ok=True)
+    restore_dir = os.path.join(work, 'data')
+    res = restore_snapshot(snap['id'], repo, restore_dir)
+    if not res['success']:
+        raise DownloadError(res['stderr'] or 'Restore failed')
+    if fmt == 'plain':
+        try:
+            return plain_export.build(restore_dir, snap, work)
+        except plain_export.PlainExportError as exc:
+            raise DownloadError(str(exc)) from exc
+    archive, error = package_encrypted_bundle(snap['id'], repo, work, restore_dir)
+    if error:
+        raise DownloadError(error)
+    return archive, f'backup_{snap["id"][:8]}.restic.tar.gz'
+
+def resolve_download_request(backup_id, data, fmt):
+    """Validate a download request. Returns (repo, snap, None) or (None, None, error_response)."""
+    if not SNAPSHOT_ID_RE.fullmatch(backup_id):
+        return None, None, (jsonify({'success': False, 'error': 'Invalid snapshot id'}), 400)
+    if fmt not in ('plain', 'encrypted'):
+        return None, None, (jsonify({'success': False, 'error': 'format must be plain or encrypted'}), 400)
+    password = data.get('password')
+    user = getattr(request, 'current_user', '') or ''
+    if fmt == 'plain':
+        if not isinstance(password, str) or not password:
+            return None, None, (jsonify({'success': False, 'error': 'Repository password is required'}), 400)
+        locked = password_lockout_response(user)
+        if locked:
+            return None, None, locked
+    repo, snap = find_snapshot(backup_id)
+    if repo is None:
+        return None, None, (jsonify({'success': False, 'error': 'Snapshot not found'}), 404)
+    if fmt == 'plain':
+        wrong = repository_password_error(repo, password, user, snap['id'])
+        if wrong:
+            return None, None, wrong
+    snap['repository_id'] = repo.get('id')
+    snap = (apply_profile_snapshot_policy([snap]) or [snap])[0]
+    space_error = download_disk_space_error(snap, 2 if fmt == 'plain' else 3)
+    if space_error:
+        return None, None, (jsonify({'success': False, 'error': space_error}), 507)
+    return repo, snap, None
+
 @app.route('/api/backup/<backup_id>/download-plain', methods=['POST'])
 @token_required
 def download_plain_backup(backup_id):
     """Return the snapshot's own files as one unencrypted gzip download.
 
-    Requires the password of the repository that encrypts the snapshot: the
-    result is no longer protected by restic, so a dashboard session alone is
-    not enough to take the data out in the clear.
+    Requires the password of the repository that encrypts the snapshot.
     """
-    if not SNAPSHOT_ID_RE.fullmatch(backup_id):
-        return jsonify({'success': False, 'error': 'Invalid snapshot id'}), 400
-    data = request.get_json(silent=True) or {}
-    password = data.get('password')
-    if not isinstance(password, str) or not password:
-        return jsonify({'success': False, 'error': 'Repository password is required'}), 400
-
-    user = getattr(request, 'current_user', '') or ''
-    now = time.monotonic()
-    with _plain_download_failures_lock:
-        recent = _plain_download_recent_failures(user, now)
-        if len(recent) >= PLAIN_DOWNLOAD_MAX_FAILURES:
-            retry_after = int(PLAIN_DOWNLOAD_FAILURE_WINDOW - (now - recent[0])) + 1
-            response = jsonify({
-                'success': False,
-                'error': f'Too many wrong passwords. Try again in {retry_after} seconds.',
-            })
-            response.headers['Retry-After'] = str(retry_after)
-            return response, 429
-
-    repo, snap = find_snapshot(backup_id)
-    if repo is None:
-        return jsonify({'success': False, 'error': 'Snapshot not found'}), 404
-
-    expected = repo.get('password', RESTIC_PASSWORD) or ''
-    if not expected or not hmac.compare_digest(password.encode(), expected.encode()):
-        with _plain_download_failures_lock:
-            recent = _plain_download_recent_failures(user, now)
-            recent.append(now)
-            _plain_download_failures[user] = recent
-            attempts_left = max(0, PLAIN_DOWNLOAD_MAX_FAILURES - len(recent))
-        app.logger.warning('Rejected plain download of %s: wrong repository password', backup_id[:8])
-        return jsonify({
-            'success': False,
-            'error': 'Wrong repository password',
-            'attempts_left': attempts_left,
-        }), 403
-    with _plain_download_failures_lock:
-        _plain_download_failures.pop(user, None)
-
-    snap['repository_id'] = repo.get('id')
-    snap = (apply_profile_snapshot_policy([snap]) or [snap])[0]
-    size = snapshot_size(snap)
-    if size:
-        needed = size * 2 + 64 * 1024 * 1024
-        free = shutil.disk_usage(BACKUP_BASE).free
-        if free < needed:
-            return jsonify({
-                'success': False,
-                'error': f'Not enough free disk space: needs about {format_bytes(needed)}, '
-                         f'only {format_bytes(free)} is available',
-            }), 507
+    repo, snap, error = resolve_download_request(backup_id, request.get_json(silent=True) or {}, 'plain')
+    if error:
+        return error
 
     work = tempfile.mkdtemp(prefix='download_', dir=BACKUP_BASE)
-    restore_dir = os.path.join(work, 'data')
 
     def cleanup():
         shutil.rmtree(work, ignore_errors=True)
 
-    res = restore_snapshot(snap['id'], repo, restore_dir)
-    if not res['success']:
-        cleanup()
-        return jsonify({'success': False, 'error': res['stderr'] or 'Restore failed'}), 500
-
     try:
-        path, download_name = plain_export.build(restore_dir, snap, work)
-    except plain_export.PlainExportError as exc:
+        path, download_name = build_download('plain', snap, repo, work)
+    except DownloadError as exc:
         cleanup()
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        return jsonify({'success': False, 'error': str(exc)}), exc.status
     except Exception:
         cleanup()
         raise
@@ -1179,6 +1236,172 @@ def download_plain_backup(backup_id):
         return response
 
     return send_file(path, as_attachment=True, download_name=download_name, mimetype='application/gzip')
+
+# ==================== ONE-TIME DOWNLOAD LINKS ====================
+
+def download_link_store():
+    return DownloadLinkStore(BACKUP_BASE)
+
+def cleanup_download_links():
+    try:
+        download_link_store().cleanup(DOWNLOAD_LINK_PREPARE_TIMEOUT)
+    except Exception:
+        app.logger.exception('Download link cleanup failed')
+
+def prepare_download_link(store, state, snap, repo):
+    """Background worker: restore + package, then make the link redeemable."""
+    directory = store.job_dir(state['id'])
+    work = str(directory / 'work')
+    try:
+        path, name = build_download(state['format'], snap, repo, work)
+        if not directory.is_dir():
+            return  # revoked while preparing
+        store.mark_ready(state, path, name, DOWNLOAD_LINK_TTL_SECONDS)
+    except Exception as exc:
+        if not isinstance(exc, DownloadError):
+            app.logger.exception('Preparing download link failed')
+        try:
+            store.mark_failed(state, str(exc) or exc.__class__.__name__)
+        except OSError:
+            pass  # revoked while preparing
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+@app.route('/api/backup/<backup_id>/download-link', methods=['POST'])
+@token_required
+def create_download_link(backup_id):
+    """Prepare a download in the background and return a one-time link to it.
+
+    The link works without a dashboard session (e.g. curl on another server),
+    can be redeemed exactly once, and expires DOWNLOAD_LINK_TTL_SECONDS after
+    the file is ready. The token is returned only in this response.
+    """
+    data = request.get_json(silent=True) or {}
+    fmt = data.get('format', 'plain')
+    repo, snap, error = resolve_download_request(backup_id, data, fmt)
+    if error:
+        return error
+
+    store = download_link_store()
+    store.cleanup(DOWNLOAD_LINK_PREPARE_TIMEOUT)
+    if store.active_count() >= DOWNLOAD_LINK_MAX_PREPARING:
+        return jsonify({
+            'success': False,
+            'error': 'Other downloads are still being prepared; try again when they are ready',
+        }), 429
+
+    token, state = store.create({
+        'format': fmt,
+        'snapshot_id': snap['id'],
+        'repository_id': repo.get('id') or 'default',
+        'profile_name': snap.get('profile_name') or '',
+        'created_by': getattr(request, 'current_user', '') or '',
+    })
+    threading.Thread(
+        target=prepare_download_link,
+        args=(store, state, snap, repo),
+        name=f'download-{state["id"][:8]}',
+        daemon=True,
+    ).start()
+    return jsonify({
+        'success': True,
+        'link': public_download_state(state),
+        'url': f'/dl/{token}',
+        'ttl_seconds': DOWNLOAD_LINK_TTL_SECONDS,
+    }), 202
+
+@app.route('/api/download-links/<job_id>', methods=['GET'])
+@token_required
+def get_download_link(job_id):
+    try:
+        state = download_link_store().load(job_id)
+    except ValueError:
+        state = None
+    if state is None:
+        return jsonify({'success': False, 'error': 'Download link not found'}), 404
+    return jsonify({'success': True, 'link': public_download_state(state)})
+
+@app.route('/api/download-links/<job_id>', methods=['DELETE'])
+@token_required
+def revoke_download_link(job_id):
+    if not download_link_store().delete(job_id):
+        return jsonify({'success': False, 'error': 'Download link not found'}), 404
+    return jsonify({'success': True, 'message': 'Download link revoked'})
+
+LINK_PAGE_MESSAGES = {
+    'not_found': (404, 'Link not found', 'This download link does not exist or was revoked.'),
+    'preparing': (409, 'Still preparing', 'The backup is still being prepared. Reload this page in a moment.'),
+    'failed': (410, 'Download failed', 'The backup could not be prepared. Create a new link in the dashboard.'),
+    'expired': (410, 'Link expired', 'This download link has expired. Create a new one in the dashboard.'),
+    'used': (410, 'Link already used', 'One-time links can be downloaded only once. Create a new one in the dashboard.'),
+}
+
+def download_link_page(title, text, status=200, button=False):
+    body = (
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<meta name="robots" content="noindex">'
+        f'<title>{html.escape(title)} · Backupstic</title><style>'
+        ':root{color-scheme:light dark;--bg:#f4f6fa;--card:#fff;--text:#132033;--muted:#5b6b7f;--line:#dfe5ee;--blue:#2563eb}'
+        '@media (prefers-color-scheme:dark){:root{--bg:#0d1420;--card:#152031;--text:#e6edf6;--muted:#9aa9bb;--line:#26354a;--blue:#4f8cff}}'
+        'body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--text);'
+        'font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:16px;box-sizing:border-box}'
+        '.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px;max-width:440px;width:100%;box-sizing:border-box}'
+        'h1{font-size:19px;margin:0 0 8px}p{margin:0 0 6px;color:var(--muted)}.file{color:var(--text);font-weight:600;word-break:break-all}'
+        'button{margin-top:18px;width:100%;padding:11px;border:0;border-radius:10px;background:var(--blue);color:#fff;font:inherit;font-weight:600;cursor:pointer}'
+        '</style></head><body><main class="card">'
+        f'<h1>{html.escape(title)}</h1>{text}'
+        + ('<form method="post"><button type="submit">Download</button></form>' if button else '')
+        + '</main></body></html>'
+    )
+    response = app.response_class(body, status=status, mimetype='text/html')
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+@app.route('/dl/<token>', methods=['GET'])
+def download_link_landing(token):
+    """Landing page; does NOT consume the link.
+
+    Chat apps and mail scanners fetch links with GET to build previews, so only
+    the POST below hands out (and burns) the file.
+    """
+    job_id = download_job_id_for(token)
+    state = download_link_store().load(job_id) if job_id else None
+    if state is None:
+        code = 'not_found'
+    elif state.get('status') == 'ready' and (state.get('expires_at') or 0) < time.time():
+        code = 'expired'
+    else:
+        code = {'preparing': 'preparing', 'failed': 'failed', 'claimed': 'used'}.get(state.get('status'), '')
+    if code:
+        status, title, text = LINK_PAGE_MESSAGES[code]
+        return download_link_page(title, f'<p>{html.escape(text)}</p>', status)
+    expires = datetime.datetime.fromtimestamp(state['expires_at'], datetime.timezone.utc)
+    text = (
+        f'<p class="file">{html.escape(state.get("filename", ""))}</p>'
+        f'<p>{html.escape(format_bytes(state.get("size", 0)))}'
+        f'{" · not encrypted" if state.get("format") == "plain" else " · encrypted restic bundle"}</p>'
+        f'<p>This link works once and expires {html.escape(expires.strftime("%Y-%m-%d %H:%M UTC"))}.</p>'
+    )
+    return download_link_page('Backup download', text, button=True)
+
+@app.route('/dl/<token>', methods=['POST'])
+def redeem_download_link(token):
+    job_id = download_job_id_for(token)
+    store = download_link_store()
+    path, state, code = store.claim(job_id) if job_id else (None, None, 'not_found')
+    if code:
+        status, title, text = LINK_PAGE_MESSAGES[code]
+        return download_link_page(title, f'<p>{html.escape(text)}</p>', status)
+    app.logger.info('Download link %s redeemed', job_id[:8])
+
+    @after_this_request
+    def _remove(response):
+        # The open file keeps streaming; only the state stays, to answer "already used".
+        store.discard_payload(job_id)
+        return response
+
+    return send_file(path, as_attachment=True, download_name=state['filename'], mimetype='application/gzip')
 
 # ==================== BACKUP VERIFICATION ENDPOINTS ====================
 
@@ -1313,6 +1536,7 @@ def auto_verify_loop():
             process_verify_queue_once()
         except Exception:
             app.logger.exception('Post-backup health check queue failed')
+        cleanup_download_links()
         time.sleep(AUTO_VERIFY_POLL_SECONDS)
 
 _auto_verify_started = False

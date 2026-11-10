@@ -333,6 +333,71 @@ class EndToEndVerificationTests(unittest.TestCase):
         self.assertEqual(locked.status_code, 429)
         self.assertIn('Retry-After', locked.headers)
 
+    def create_link(self, snapshot_id, **body):
+        response = self.client.post(
+            f'/api/backup/{snapshot_id[:8]}/download-link', headers=self.headers, json=body,
+        )
+        return response
+
+    def wait_for_link(self, link_id):
+        deadline = time.monotonic() + 120
+        while time.monotonic() < deadline:
+            link = self.client.get(f'/api/download-links/{link_id}', headers=self.headers).get_json()['link']
+            if link['status'] != 'preparing':
+                return link
+            time.sleep(0.2)
+        self.fail('download link was not prepared')
+
+    def test_one_time_link_downloads_plain_archive_once(self):
+        staging = self.base / '.staging' / 'e2e'
+        write_healthy_backup(staging)
+        snapshot_id = self.snapshot(staging)
+        app_module._plain_download_failures.clear()
+        self.addCleanup(app_module._plain_download_failures.clear)
+
+        self.assertEqual(self.create_link(snapshot_id, format='plain', password='wrong').status_code, 403)
+        created = self.create_link(snapshot_id, format='plain', password=self.password)
+        self.assertEqual(created.status_code, 202, created.get_data(as_text=True))
+        url = created.get_json()['url']
+        link = self.wait_for_link(created.get_json()['link']['id'])
+        self.assertEqual(link['status'], 'ready', link)
+        self.assertTrue(link['filename'].endswith(f'_{snapshot_id[:8]}.tar.gz'))
+
+        # No session needed; GET only shows the landing page (link previews must not burn it).
+        landing = self.client.get(url)
+        self.assertEqual(landing.status_code, 200)
+        self.assertIn(link['filename'], landing.get_data(as_text=True))
+        self.assertEqual(self.client.get(url).status_code, 200)
+
+        response = self.client.post(url)
+        self.addCleanup(response.close)
+        self.assertEqual(response.status_code, 200)
+        with tarfile.open(fileobj=io.BytesIO(response.get_data()), mode='r:gz') as archive:
+            self.assertEqual(sorted(archive.getnames()), sorted(os.listdir(staging)))
+
+        self.assertEqual(self.client.post(url).status_code, 410)
+        used = self.client.get(url)
+        self.assertEqual(used.status_code, 410)
+        self.assertIn('already used', used.get_data(as_text=True))
+        leftovers = [p.name for p in (self.base / 'downloads').rglob('*') if p.is_file()]
+        self.assertEqual(leftovers, ['state.json'])
+
+    def test_one_time_link_for_encrypted_bundle_and_revoke(self):
+        staging = self.base / '.staging' / 'e2e'
+        write_healthy_backup(staging)
+        snapshot_id = self.snapshot(staging)
+
+        created = self.create_link(snapshot_id, format='encrypted')
+        self.assertEqual(created.status_code, 202, created.get_data(as_text=True))
+        link = self.wait_for_link(created.get_json()['link']['id'])
+        self.assertEqual(link['filename'], f'backup_{snapshot_id[:8]}.restic.tar.gz')
+
+        revoked = self.client.delete(f'/api/download-links/{link["id"]}', headers=self.headers)
+        self.assertEqual(revoked.status_code, 200)
+        self.assertEqual(self.client.post(created.get_json()['url']).status_code, 404)
+        self.assertEqual(self.client.post('/dl/not-a-valid-token').status_code, 404)
+        self.assertEqual(self.create_link(snapshot_id, format='zip').status_code, 400)
+
     def test_queued_snapshot_is_verified_automatically(self):
         staging = self.base / '.staging' / 'e2e'
         write_healthy_backup(staging)

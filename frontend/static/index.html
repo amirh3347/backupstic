@@ -978,6 +978,35 @@
 
         .download-password {
             margin-top: 16px;
+            margin-bottom: 0;
+        }
+
+        #downloadForm > .form-hint {
+            margin: 4px 0 14px;
+        }
+
+        .link-ready {
+            margin-top: 16px;
+        }
+
+        .copy-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .copy-row input {
+            flex: 1;
+            min-width: 0;
+            font-family: var(--mono);
+            font-size: 12px;
+        }
+
+        #downloadLinkPanel .form-actions {
+            flex-wrap: wrap;
+        }
+
+        #downloadRevokeBtn {
+            margin-right: auto;
         }
 
         .form-error {
@@ -2285,14 +2314,42 @@
                         <label for="downloadPassword">Repository password</label>
                         <input type="password" id="downloadPassword" name="backup-repository-password" autocomplete="off" spellcheck="false">
                         <p class="form-hint" id="downloadPasswordHint">Enter the password of the repository that encrypts this profile's backups. The file is decrypted on the server and downloaded unencrypted — keep it somewhere safe.</p>
-                        <div class="form-error" id="downloadError" role="alert"></div>
                     </div>
+                    <div class="form-error" id="downloadError" role="alert"></div>
+                    <p class="form-hint">The server prepares the file and gives you a one-time link: download it here, or copy it to another machine (no dashboard login needed). It works once and expires after a while.</p>
 
                     <div class="form-actions">
                         <button type="button" class="btn btn-outline" id="downloadCancelBtn">Cancel</button>
-                        <button type="submit" class="btn btn-primary" id="downloadSubmitBtn"><svg class="icon"><use href="#i-download"/></svg>Download</button>
+                        <button type="submit" class="btn btn-primary" id="downloadSubmitBtn"><svg class="icon"><use href="#i-download"/></svg>Create download link</button>
                     </div>
                 </form>
+
+                <div id="downloadLinkPanel" style="display: none;">
+                    <div class="verify-hero" id="downloadLinkHero"></div>
+                    <div id="downloadLinkReady" class="link-ready" style="display: none;">
+                        <div class="form-group">
+                            <label for="downloadLinkUrl">One-time link</label>
+                            <div class="copy-row">
+                                <input type="text" id="downloadLinkUrl" readonly spellcheck="false">
+                                <button type="button" class="btn btn-outline btn-sm" data-copy="downloadLinkUrl">Copy</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="downloadLinkCurl">From another server</label>
+                            <div class="copy-row">
+                                <input type="text" id="downloadLinkCurl" readonly spellcheck="false">
+                                <button type="button" class="btn btn-outline btn-sm" data-copy="downloadLinkCurl">Copy</button>
+                            </div>
+                            <p class="form-hint">Opening the link in a browser shows a download page, so chat-app link previews do not use it up. The file can be downloaded only once and is then deleted from the server.</p>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-outline btn-danger" id="downloadRevokeBtn">Revoke</button>
+                        <button type="button" class="btn btn-outline" id="downloadNewLinkBtn">New link</button>
+                        <button type="button" class="btn btn-outline" id="downloadLinkCloseBtn">Close</button>
+                        <button type="button" class="btn btn-primary" id="downloadNowBtn"><svg class="icon"><use href="#i-download"/></svg>Download now</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -2392,6 +2449,8 @@
                 clearInterval(verifyPollHandle);
                 verifyPollHandle = null;
             }
+            stopDownloadLinkPolling();
+            downloadLink = null;
         }
 
         function setAuthToken(token) {
@@ -3538,15 +3597,22 @@
         }
 
         // ==================== Downloads ====================
-        // Two formats: a plain gzip of the backup files (needs the repository
-        // password) or the encrypted restic bundle. Both use fetch+blob because
-        // a plain <a href> can't send the auth header.
+        // The server prepares the file and returns a one-time link. The
+        // browser then downloads it natively (streamed, with progress, no
+        // in-memory blob), or the link is copied to another machine.
         let downloadSnapshotId = null;
         let downloadInFlight = false;
+        let downloadLink = null;       // { id, url, snapshotId, status, ... }
+        let downloadLinkPoll = null;
+        const DOWNLOAD_LINK_LIVE = ['preparing', 'ready'];
 
         function downloadFormat() {
             const checked = document.querySelector('input[name="downloadFormat"]:checked');
             return checked ? checked.value : 'plain';
+        }
+
+        function downloadModalOpen() {
+            return document.getElementById('downloadModal').style.display === 'flex';
         }
 
         function updateDownloadForm() {
@@ -3561,8 +3627,17 @@
             const btn = document.getElementById('downloadSubmitBtn');
             btn.disabled = busy;
             btn.innerHTML = busy
-                ? '<span class="mini-spinner"></span>Preparing…'
-                : `${svgIcon('download')}Download`;
+                ? '<span class="mini-spinner"></span>Creating…'
+                : `${svgIcon('download')}Create download link`;
+        }
+
+        function showDownloadForm() {
+            document.getElementById('downloadForm').style.display = 'block';
+            document.getElementById('downloadLinkPanel').style.display = 'none';
+            document.getElementById('downloadPassword').value = '';
+            document.getElementById('downloadError').textContent = '';
+            if (!downloadInFlight) setDownloadBusy(false);
+            updateDownloadForm();
         }
 
         function openDownload(snapshotId) {
@@ -3575,14 +3650,18 @@
                 snap.size ? formatBytes(snap.size) : ''
             ].filter(Boolean).map(escapeHtml);
             document.getElementById('downloadMeta').innerHTML = meta.map(item => `<span>${item}</span>`).join('<span>·</span>');
-            const repoName = snapRepositoryName(snap);
             document.getElementById('downloadPasswordHint').textContent =
-                `Password of the "${repoName}" repository, which encrypts this profile's backups. ` +
+                `Password of the "${snapRepositoryName(snap)}" repository, which encrypts this profile's backups. ` +
                 'The file is decrypted on the server and downloaded unencrypted — keep it somewhere safe.';
-            document.getElementById('downloadPassword').value = '';
-            if (!downloadInFlight) setDownloadBusy(false);
             document.getElementById('downloadModal').style.display = 'flex';
-            updateDownloadForm();
+            // Reopening the same backup brings back its pending/ready link.
+            if (downloadLink && downloadLink.snapshotId === snapshotId) {
+                document.getElementById('downloadForm').style.display = 'none';
+                document.getElementById('downloadLinkPanel').style.display = 'block';
+                renderDownloadLink();
+            } else {
+                showDownloadForm();
+            }
         }
 
         function closeDownloadModal() {
@@ -3591,75 +3670,191 @@
             document.getElementById('downloadError').textContent = '';
         }
 
-        function filenameFromResponse(res, fallback) {
-            const header = res.headers.get('Content-Disposition') || '';
-            const encoded = header.match(/filename\*=UTF-8''([^;]+)/i);
-            if (encoded) {
-                try { return decodeURIComponent(encoded[1]); } catch (_) {}
-            }
-            const plain = header.match(/filename="?([^";]+)"?/i);
-            return plain ? plain[1] : fallback;
-        }
-
-        async function saveBlobResponse(res, fallbackName) {
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filenameFromResponse(res, fallbackName);
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-        }
-
         async function submitDownload() {
             if (downloadInFlight || !downloadSnapshotId) return;
             const id = downloadSnapshotId;
-            const plain = downloadFormat() === 'plain';
+            const format = downloadFormat();
             const errorEl = document.getElementById('downloadError');
             const password = document.getElementById('downloadPassword').value;
             errorEl.textContent = '';
-            if (plain && !password) {
+            if (format === 'plain' && !password) {
                 errorEl.textContent = 'Enter the repository password';
                 document.getElementById('downloadPassword').focus();
                 return;
             }
+            if (downloadLink && DOWNLOAD_LINK_LIVE.includes(downloadLink.status) && downloadLink.snapshotId !== id) {
+                // Only one link is tracked in the UI; the older one simply expires on the server.
+                stopDownloadLinkPolling();
+            }
 
             setDownloadBusy(true);
-            showToast('Preparing download… restoring the snapshot may take a while', 'info');
             try {
-                const res = plain
-                    ? await apiFetch(`/api/backup/${encodeURIComponent(id)}/download-plain`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ password })
-                    })
-                    : await apiFetch(`/api/backup/${encodeURIComponent(shortId(id))}/download`);
-                if (!res.ok) {
-                    let msg = `HTTP ${res.status}`;
-                    let data = {};
-                    try { data = await res.json(); msg = data.error || msg; } catch (_) {}
+                const res = await apiFetch(`/api/backup/${encodeURIComponent(id)}/download-link`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(format === 'plain' ? { format, password } : { format })
+                });
+                let data = {};
+                try { data = await res.json(); } catch (_) {}
+                if (!res.ok || !data.success) {
+                    let msg = data.error || `HTTP ${res.status}`;
                     if (res.status === 403 && typeof data.attempts_left === 'number') {
                         msg += data.attempts_left > 0
                             ? ` · ${data.attempts_left} ${data.attempts_left === 1 ? 'attempt' : 'attempts'} left`
                             : ' · no attempts left for a few minutes';
                     }
-                    if (document.getElementById('downloadModal').style.display === 'flex' && downloadSnapshotId === id) {
+                    if (downloadModalOpen() && downloadSnapshotId === id) {
                         errorEl.textContent = msg;
                         if (res.status === 403) document.getElementById('downloadPassword').select();
+                    } else {
+                        showToast(`Download failed: ${msg}`, 'error');
                     }
-                    showToast(`Download failed: ${msg}`, 'error');
                     return;
                 }
-                await saveBlobResponse(res, plain ? `backup_${shortId(id)}.tar.gz` : `backup_${shortId(id)}.restic.tar.gz`);
-                if (downloadSnapshotId === id) closeDownloadModal();
-                showToast('Download ready', 'success');
+                document.getElementById('downloadPassword').value = '';
+                downloadLink = { ...data.link, url: new URL(data.url, window.location.origin).href, snapshotId: id };
+                if (downloadModalOpen() && downloadSnapshotId === id) {
+                    document.getElementById('downloadForm').style.display = 'none';
+                    document.getElementById('downloadLinkPanel').style.display = 'block';
+                }
+                renderDownloadLink();
+                startDownloadLinkPolling();
             } catch (e) {
-                showToast('Download failed', 'error');
+                errorEl.textContent = 'Could not create the download link';
             } finally {
                 setDownloadBusy(false);
             }
+        }
+
+        function startDownloadLinkPolling() {
+            stopDownloadLinkPolling();
+            downloadLinkPoll = setInterval(pollDownloadLink, 2000);
+        }
+
+        function stopDownloadLinkPolling() {
+            if (downloadLinkPoll) {
+                clearInterval(downloadLinkPoll);
+                downloadLinkPoll = null;
+            }
+        }
+
+        async function refreshDownloadLink() {
+            if (!downloadLink) return null;
+            const link = downloadLink;
+            try {
+                const res = await apiFetch(`/api/download-links/${link.id}`);
+                if (downloadLink !== link) return null;
+                if (res.status === 404) {
+                    // Deleted on the server: used up, revoked or expired.
+                    if (link.status === 'ready') link.status = (new Date(link.expires_at) < new Date()) ? 'expired' : 'claimed';
+                    else if (link.status === 'preparing') link.status = 'gone';
+                    return link;
+                }
+                const data = await res.json();
+                if (data.success) Object.assign(link, data.link);
+                return link;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        async function pollDownloadLink() {
+            const before = downloadLink && downloadLink.status;
+            const link = await refreshDownloadLink();
+            if (!link) return;
+            if (link.status === 'ready' && new Date(link.expires_at) < new Date()) link.status = 'expired';
+            renderDownloadLink();
+            if (before === 'preparing' && link.status === 'ready' && !(downloadModalOpen() && downloadSnapshotId === link.snapshotId)) {
+                showToast(`Download link for backup ${link.short_id} is ready — open Download to get it`, 'success');
+            }
+            if (before === 'preparing' && link.status === 'failed') {
+                showToast(`Preparing backup ${link.short_id} failed: ${link.error}`, 'error');
+            }
+            // Keep polling while ready too, to notice when it is used elsewhere or expires.
+            if (!DOWNLOAD_LINK_LIVE.includes(link.status)) stopDownloadLinkPolling();
+        }
+
+        function renderDownloadLink() {
+            const link = downloadLink;
+            if (!link || !(downloadModalOpen() && downloadSnapshotId === link.snapshotId)) return;
+            const expires = link.expires_at ? new Date(link.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+            const views = {
+                preparing: ['running', '<span class="spinner"></span>', 'Preparing the download…',
+                    `Restoring backup ${link.short_id} and packing it${link.format === 'plain' ? '' : ' into an encrypted bundle'}. You can close this window — reopen Download on this backup to get the link.`],
+                ready: ['passed', svgIcon('check'), 'One-time link ready',
+                    `${link.filename} · ${formatBytes(link.size)} · works once · expires at ${expires}`],
+                claimed: ['passed', svgIcon('check'), 'Link used',
+                    'The file was downloaded and removed from the server. Create a new link to download it again.'],
+                failed: ['failed', svgIcon('x'), 'Preparing the download failed', link.error || 'Unknown error'],
+                expired: ['interrupted', svgIcon('alert'), 'Link expired', 'The prepared file was removed. Create a new link.'],
+                revoked: ['interrupted', svgIcon('alert'), 'Link revoked', 'The link no longer works and the file was removed.'],
+                gone: ['interrupted', svgIcon('alert'), 'Link no longer available', 'It was revoked or cleaned up on the server. Create a new link.']
+            };
+            const [tone, icon, title, text] = views[link.status] || views.gone;
+            const hero = document.getElementById('downloadLinkHero');
+            hero.className = `verify-hero is-${tone}`;
+            hero.innerHTML = `<div class="verify-hero-icon">${icon}</div><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(text)}</p></div>`;
+
+            const ready = link.status === 'ready';
+            document.getElementById('downloadLinkReady').style.display = ready ? 'block' : 'none';
+            if (ready) {
+                document.getElementById('downloadLinkUrl').value = link.url;
+                document.getElementById('downloadLinkCurl').value = `curl -fOJ -X POST '${link.url}'`;
+            }
+            document.getElementById('downloadNowBtn').style.display = ready ? '' : 'none';
+            document.getElementById('downloadRevokeBtn').style.display = DOWNLOAD_LINK_LIVE.includes(link.status) ? '' : 'none';
+            document.getElementById('downloadNewLinkBtn').style.display = DOWNLOAD_LINK_LIVE.includes(link.status) ? 'none' : '';
+        }
+
+        async function downloadNow() {
+            const link = downloadLink;
+            if (!link || link.status !== 'ready') return;
+            const fresh = await refreshDownloadLink();
+            if (!fresh || fresh.status !== 'ready') {
+                renderDownloadLink();
+                return;
+            }
+            // A form POST lets the browser stream the file to disk natively.
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = link.url;
+            form.style.display = 'none';
+            document.body.appendChild(form);
+            form.submit();
+            form.remove();
+            link.status = 'claimed';
+            stopDownloadLinkPolling();
+            renderDownloadLink();
+            showToast('Download started', 'success');
+        }
+
+        async function revokeDownloadLink() {
+            const link = downloadLink;
+            if (!link) return;
+            try {
+                await apiFetch(`/api/download-links/${link.id}`, { method: 'DELETE' });
+            } catch (e) {
+                // Expired links clean themselves up anyway.
+            }
+            link.status = 'revoked';
+            stopDownloadLinkPolling();
+            renderDownloadLink();
+        }
+
+        async function copyField(inputId, button) {
+            const input = document.getElementById(inputId);
+            let copied = false;
+            try {
+                await navigator.clipboard.writeText(input.value);
+                copied = true;
+            } catch (e) {
+                // navigator.clipboard needs HTTPS or localhost; fall back for plain-HTTP LAN access.
+                input.select();
+                try { copied = document.execCommand('copy'); } catch (_) {}
+            }
+            const label = button.textContent;
+            button.textContent = copied ? 'Copied' : 'Select & copy';
+            setTimeout(() => { button.textContent = label; }, 1500);
         }
 
         // Delete backup
@@ -4174,6 +4369,19 @@
         document.getElementById('downloadForm').addEventListener('submit', (e) => {
             e.preventDefault();
             submitDownload();
+        });
+        document.getElementById('downloadNowBtn').addEventListener('click', downloadNow);
+        document.getElementById('downloadRevokeBtn').addEventListener('click', revokeDownloadLink);
+        document.getElementById('downloadLinkCloseBtn').addEventListener('click', closeDownloadModal);
+        document.getElementById('downloadNewLinkBtn').addEventListener('click', () => {
+            downloadLink = null;
+            showDownloadForm();
+        });
+        document.querySelectorAll('#downloadLinkPanel [data-copy]').forEach(button => {
+            button.addEventListener('click', () => copyField(button.dataset.copy, button));
+        });
+        ['downloadLinkUrl', 'downloadLinkCurl'].forEach(id => {
+            document.getElementById(id).addEventListener('focus', (e) => e.target.select());
         });
 
         document.addEventListener('keydown', (e) => {
