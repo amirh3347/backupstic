@@ -159,6 +159,21 @@ class ProfileStorage:
             self._write(data)
         return profile
 
+    def put(self, profile: Dict[str, Any]) -> Dict[str, Any]:
+        """Insert or replace a profile keeping its id (configuration restore)."""
+        profile = dict(profile)
+        profile_id = str(profile.get("id") or "")
+        if not re.fullmatch(r"[A-Za-z0-9-]{1,64}", profile_id):
+            raise ValueError("Invalid profile id")
+        now = datetime.now().astimezone().isoformat()
+        profile.setdefault("created_at", now)
+        profile["updated_at"] = now
+        with _file_lock(self.lock_path, exclusive=True):
+            data = self._read()
+            data.setdefault("profiles", {})[profile_id] = encrypt_secrets(profile, PROFILE_SECRET_FIELDS)
+            self._write(data)
+        return profile
+
     def update(self, profile_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         with _file_lock(self.lock_path, exclusive=True):
             data = self._read()

@@ -112,6 +112,36 @@ docker compose exec backup-cron restic check --read-data-subset=5%
 Never restore over a live service without a reviewed runbook and a current
 secondary copy. Record recovery time and recovery point results.
 
+## 8. Losing the backup server (disaster recovery)
+
+Profiles and repository definitions live on the server's local volume, so they
+are lost with the server. To make an off-site repository self-describing, every
+repository also stores the profiles that back up into it, as a small snapshot
+tagged `backupstic-config`. It is encrypted with the repository password and
+does not depend on the old server's `PROFILE_SECRET_KEY`. A new version is saved
+after profile changes and after backups, only when something changed; the
+Repositories table shows when it was last saved. Only the profiles of a
+repository are stored in it, so one repository's password never reveals the
+credentials of another.
+
+To recover on a new server:
+
+1. Install Backupstic as usual (`./init.sh`, `docker compose up -d --build`).
+2. Add the old repository again with its URL, password and S3 keys. The
+   dashboard detects the saved configuration and offers to restore the
+   profiles. The **Config** button of a repository does the same later and also
+   lists older saved versions.
+3. Restored profiles keep their ids, schedules and secrets, so their old
+   backups appear again and retention continues where it left off.
+4. Configuration Backup profiles that use the application SSH key need the new
+   server's public key on their hosts (`ssh-copy-id`), unless you copied the old
+   `data/config-backup/` key pair over.
+
+Keep the repository passwords and S3 keys outside the backup server (for
+example in a password manager): they are the only thing a recovery needs.
+`CONFIG_SNAPSHOT_ENABLED=false` turns the feature off; `CONFIG_SNAPSHOT_KEEP`
+(default 20) limits stored versions.
+
 ## Maintenance
 
 ```bash

@@ -1005,8 +1005,46 @@
             flex-wrap: wrap;
         }
 
-        #downloadRevokeBtn {
+        #downloadRevokeBtn,
+        #configSaveNowBtn {
             margin-right: auto;
+        }
+
+        .config-version {
+            margin: 16px 0 12px;
+            max-width: 360px;
+        }
+
+        .config-profiles td:first-child,
+        .config-profiles th:first-child {
+            width: 36px;
+            padding-right: 0;
+        }
+
+        .config-profiles input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--blue);
+        }
+
+        .config-profiles tr.is-disabled td {
+            color: var(--faint);
+        }
+
+        .config-notes {
+            margin: 12px 0 4px;
+        }
+
+        .config-notes .form-hint {
+            margin-top: 4px;
+        }
+
+        .config-overwrite {
+            margin-top: 12px;
+        }
+
+        .config-status {
+            display: block;
         }
 
         .form-error {
@@ -2354,6 +2392,44 @@
         </div>
     </div>
 
+    <div id="configModal" class="modal-overlay">
+        <div class="modal modal-md" role="dialog" aria-modal="true" aria-labelledby="configModalTitle">
+            <div class="modal-header">
+                <div>
+                    <h2 id="configModalTitle">Configuration Backup</h2>
+                    <div class="verify-meta" id="configMeta"></div>
+                </div>
+                <button class="btn-close" id="configModalClose" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="verify-hero" id="configHero"></div>
+                <div id="configBody" style="display: none;">
+                    <div class="form-group config-version">
+                        <label for="configSnapshotSelect">Saved version</label>
+                        <select id="configSnapshotSelect"></select>
+                    </div>
+                    <div class="verify-archives config-profiles">
+                        <table>
+                            <thead><tr><th><input type="checkbox" id="configSelectAll" aria-label="Select all"></th><th>Profile</th><th>Type</th><th>Schedule</th><th>Backups here</th><th>Status</th></tr></thead>
+                            <tbody id="configProfilesBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="config-notes" id="configNotes"></div>
+                    <div class="checkbox-group config-overwrite">
+                        <input type="checkbox" id="configOverwrite">
+                        <label for="configOverwrite">Replace profiles that already exist here with the saved version</label>
+                    </div>
+                </div>
+                <p class="form-hint">Each repository keeps a copy of the profiles that back up into it, encrypted with the repository password. It is saved automatically after profile changes and after backups. On a new server, add the repository and restore the profiles here: they keep their ids, so their existing backups, retention and schedules continue as before.</p>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-outline" id="configSaveNowBtn">Save configuration now</button>
+                    <button type="button" class="btn btn-outline" id="configCloseBtn">Close</button>
+                    <button type="button" class="btn btn-primary" id="configRestoreBtn" style="display: none;">Restore profiles</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="toast" class="toast" style="display: none;" role="status" aria-live="polite"></div>
 
     <script>
@@ -2433,7 +2509,7 @@
             sessionStorage.removeItem('authToken');
             authToken = null;
             stopPolling();
-            ['profileModal', 'backupModal', 'repositoryModal', 'verifyModal', 'downloadModal'].forEach(id => {
+            ['profileModal', 'backupModal', 'repositoryModal', 'verifyModal', 'downloadModal', 'configModal'].forEach(id => {
                 document.getElementById(id).style.display = 'none';
             });
             document.getElementById('login-notice').textContent = 'Your session has expired. Please sign in again.';
@@ -2793,6 +2869,8 @@
                 
                 // Update backup modal checkboxes
                 loadProfileCheckboxes();
+                // Repository rows show whether their profiles are saved in them.
+                renderRepositories();
             } catch (e) {
                 document.getElementById('profilesTableBody').innerHTML = '<tr><td colspan="7" class="empty-state"><h3>Error loading profiles</h3></td></tr>';
             }
@@ -2841,13 +2919,17 @@
 
             tbody.innerHTML = repositories.map(repo => `
                 <tr>
-                    <td>${escapeHtml(repo.name || 'Unnamed')}</td>
+                    <td>
+                        <div class="cell-primary">${escapeHtml(repo.name || 'Unnamed')}</div>
+                        ${configStatusLine(repo)}
+                    </td>
                     <td><span class="profile-type ${repo.type === 'local' ? 'type-postgresql' : 'type-ssh-files'}">${repositoryTypeLabel(repo.type)}</span></td>
                     <td class="repo-path" title="${escapeHtml(repo.repository || '')}">${escapeHtml(repo.repository || '-')}</td>
                     <td>
                         <div class="btn-group">
                             <button class="btn btn-sm btn-outline" onclick="checkRepository('${repo.id}')">Check</button>
                             <button class="btn btn-sm btn-outline" onclick="initRepository('${repo.id}')">Init</button>
+                            <button class="btn btn-sm btn-outline" onclick="openConfigBackups('${escapeHtml(repo.id)}')" title="Saved profiles in this repository: save now or restore">Config</button>
                             <button class="btn btn-sm btn-outline" onclick="editRepository('${repo.id}')">Edit</button>
                             <button class="btn btn-sm btn-outline btn-danger" onclick="deleteRepository('${repo.id}')" ${repo.id === 'default' ? 'disabled' : ''}>Delete</button>
                         </div>
@@ -2994,6 +3076,9 @@
                 showToast(isEdit ? 'Repository updated successfully' : 'Repository created successfully', 'success');
                 document.getElementById('repositoryModal').style.display = 'none';
                 await loadRepositories();
+                // Re-adding an existing repository (e.g. after losing a server):
+                // offer to restore the profiles saved inside it.
+                if (!isEdit && result.repository) offerConfigRestore(result.repository.id);
             } catch (e) {
                 showToast('Failed to save repository', 'error');
             }
@@ -3857,6 +3942,240 @@
             setTimeout(() => { button.textContent = label; }, 1500);
         }
 
+        // ==================== Configuration backup (disaster recovery) ====================
+        let configRepoId = null;
+        let configData = null;
+        const CONFIG_STATUS = {
+            new: ['health-queued', 'New'],
+            exists: ['', 'Already here'],
+            name_conflict: ['health-warning', 'Name in use'],
+            invalid: ['health-failed', 'Invalid']
+        };
+
+        function configStatusLine(repo) {
+            const info = repo.config_backup;
+            if (!info || !info.enabled) return '';
+            const used = profiles.some(p => (p.repository_id || 'default') === repo.id);
+            if (!used && !info.synced_at && !info.pending) return '';
+            let text = 'Config not saved yet';
+            if (info.pending) text = 'Config: saving soon…';
+            else if (info.synced_at) {
+                const count = Number(info.profiles || 0);
+                text = `Config saved ${relativeTime(info.synced_at)} · ${count} ${count === 1 ? 'profile' : 'profiles'}`;
+            }
+            return `<div class="cell-secondary" title="Copy of this repository's profiles stored inside it, for restoring on a new server">${escapeHtml(text)}</div>`;
+        }
+
+        function configModalOpen() {
+            return document.getElementById('configModal').style.display === 'flex';
+        }
+
+        function setConfigHero(tone, icon, title, text) {
+            const hero = document.getElementById('configHero');
+            hero.className = `verify-hero is-${tone}`;
+            hero.innerHTML = `<div class="verify-hero-icon">${icon}</div><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(text)}</p></div>`;
+        }
+
+        async function fetchConfigBackups(repoId, snapshotId = '') {
+            const query = snapshotId ? `?snapshot_id=${encodeURIComponent(snapshotId)}` : '';
+            const res = await apiFetch(`/api/restic-repositories/${encodeURIComponent(repoId)}/config-backups${query}`);
+            return res.json();
+        }
+
+        function showConfigModal(repoId) {
+            configRepoId = repoId;
+            const repo = repositories.find(r => r.id === repoId) || { name: repoId };
+            document.getElementById('configMeta').innerHTML = `<span>${escapeHtml(repo.name || repoId)}</span>`;
+            document.getElementById('configOverwrite').checked = false;
+            document.getElementById('configModal').style.display = 'flex';
+        }
+
+        async function openConfigBackups(repoId) {
+            showConfigModal(repoId);
+            configData = null;
+            await loadConfigBackups();
+        }
+
+        async function offerConfigRestore(repoId) {
+            try {
+                const data = await fetchConfigBackups(repoId);
+                if (!data.success || !data.snapshots.length) return;
+                if (!(data.profiles || []).some(item => item.status === 'new')) return;
+                showConfigModal(repoId);
+                configData = data;
+                renderConfigModal(true);
+            } catch (e) {
+                // Optional convenience; the Config button still works.
+            }
+        }
+
+        async function loadConfigBackups(snapshotId = '') {
+            const repoId = configRepoId;
+            document.getElementById('configBody').style.display = 'none';
+            document.getElementById('configRestoreBtn').style.display = 'none';
+            setConfigHero('running', '<span class="spinner"></span>', 'Reading the repository…', 'Looking for saved configurations');
+            try {
+                const data = await fetchConfigBackups(repoId, snapshotId);
+                if (configRepoId !== repoId) return;
+                if (!data.success) {
+                    setConfigHero('failed', svgIcon('x'), 'Could not read the repository', data.error || 'Unknown error');
+                    return;
+                }
+                configData = data;
+                renderConfigModal();
+            } catch (e) {
+                setConfigHero('failed', svgIcon('x'), 'Could not read the repository', 'Network error');
+            }
+        }
+
+        function configSelectable(item) {
+            if (item.status === 'new') return true;
+            return item.status === 'exists' && document.getElementById('configOverwrite').checked;
+        }
+
+        function renderConfigModal(justAdded = false) {
+            const data = configData;
+            const body = document.getElementById('configBody');
+            const restoreBtn = document.getElementById('configRestoreBtn');
+            if (!data || !data.snapshots.length) {
+                body.style.display = 'none';
+                restoreBtn.style.display = 'none';
+                setConfigHero('interrupted', svgIcon('alert'), 'No configuration saved in this repository yet',
+                    'It is saved automatically after profile changes and after each backup, or right now with "Save configuration now".');
+                return;
+            }
+            const items = data.profiles || [];
+            const fresh = items.filter(item => item.status === 'new').length;
+            const savedAt = data.selected.exported_at || data.selected.time;
+            const summary = `Saved ${formatDate(savedAt)} (${relativeTime(savedAt)}) · ${items.length} ${items.length === 1 ? 'profile' : 'profiles'}` +
+                (fresh ? ` · ${fresh} not on this server yet` : ' · all already on this server');
+            if (justAdded) {
+                setConfigHero('queued', svgIcon('database'), 'This repository contains saved profiles', `${summary}. Restore them to continue backing up as before.`);
+            } else {
+                setConfigHero(fresh ? 'queued' : 'passed', fresh ? svgIcon('database') : svgIcon('check'),
+                    fresh ? 'Saved configuration found' : 'Configuration is up to date here', summary);
+            }
+
+            const select = document.getElementById('configSnapshotSelect');
+            select.innerHTML = data.snapshots.map((snap, index) =>
+                `<option value="${escapeHtml(snap.id)}">${escapeHtml(formatDate(snap.time))}${index === 0 ? ' (latest)' : ''} · ${escapeHtml(snap.short_id)}</option>`
+            ).join('');
+            select.value = data.selected.id;
+
+            const previous = new Set([...document.querySelectorAll('#configProfilesBody input:checked')].map(input => input.value));
+            document.getElementById('configProfilesBody').innerHTML = items.map(item => {
+                const [cls, label] = CONFIG_STATUS[item.status] || ['', item.status];
+                const selectable = configSelectable(item);
+                const checked = selectable && (item.status === 'new' || previous.has(item.id));
+                return `
+                    <tr class="${selectable ? '' : 'is-disabled'}">
+                        <td><input type="checkbox" value="${escapeHtml(item.id)}" ${selectable ? '' : 'disabled'} ${checked ? 'checked' : ''} aria-label="Restore ${escapeHtml(item.name)}"></td>
+                        <td>
+                            <div class="cell-primary">${escapeHtml(item.name)}</div>
+                            ${item.description ? `<div class="cell-secondary">${escapeHtml(item.description)}</div>` : ''}
+                        </td>
+                        <td><span class="profile-type ${typeClass(item.type)}">${escapeHtml(typeLabel(item.type))}</span></td>
+                        <td><span class="mono">${escapeHtml(item.schedule)}</span>${item.enabled ? '' : '<div class="cell-secondary">disabled</div>'}</td>
+                        <td>${Number(item.backups || 0)}</td>
+                        <td>
+                            <span class="health-badge ${cls}">${escapeHtml(label)}</span>
+                            ${item.error ? `<div class="step-detail">${escapeHtml(item.error)}</div>` : ''}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            const notes = [];
+            if (items.some(item => item.type === 'ssh_files' && item.auth_method !== 'password')) {
+                notes.push('Configuration Backup profiles that use the application SSH key need this server\'s public key on their hosts (ssh-copy-id with data/config-backup/id_ed25519.pub), unless you copied the old key pair over.');
+            }
+            if (items.some(item => item.status === 'name_conflict')) {
+                notes.push('A profile with the same name and type already exists here. Delete it first to restore the saved one with its original id (that keeps its backup history together).');
+            }
+            document.getElementById('configNotes').innerHTML = notes.map(note => `<p class="form-hint">${escapeHtml(note)}</p>`).join('');
+            body.style.display = 'block';
+            restoreBtn.style.display = '';
+            updateConfigRestoreButton();
+        }
+
+        function updateConfigRestoreButton() {
+            const boxes = [...document.querySelectorAll('#configProfilesBody input[type="checkbox"]:not(:disabled)')];
+            const count = boxes.filter(box => box.checked).length;
+            const btn = document.getElementById('configRestoreBtn');
+            btn.disabled = count === 0;
+            btn.textContent = count ? `Restore ${count} ${count === 1 ? 'profile' : 'profiles'}` : 'Restore profiles';
+            const all = document.getElementById('configSelectAll');
+            all.disabled = boxes.length === 0;
+            all.checked = boxes.length > 0 && count === boxes.length;
+        }
+
+        function closeConfigModal() {
+            document.getElementById('configModal').style.display = 'none';
+            configRepoId = null;
+            configData = null;
+        }
+
+        async function restoreConfigProfiles() {
+            if (!configData || !configRepoId) return;
+            const ids = [...document.querySelectorAll('#configProfilesBody input:checked:not(:disabled)')].map(input => input.value);
+            if (!ids.length) return;
+            const btn = document.getElementById('configRestoreBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="mini-spinner"></span>Restoring…';
+            try {
+                const res = await apiFetch(`/api/restic-repositories/${encodeURIComponent(configRepoId)}/config-backups/restore`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        snapshot_id: configData.selected.id,
+                        profile_ids: ids,
+                        overwrite: document.getElementById('configOverwrite').checked
+                    })
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    showToast(`Restore failed: ${data.error}`, 'error');
+                    updateConfigRestoreButton();
+                    return;
+                }
+                const done = data.restored + data.replaced;
+                const failed = (data.results || []).filter(r => r.result === 'failed');
+                showToast(
+                    `${done} ${done === 1 ? 'profile' : 'profiles'} restored` +
+                    (failed.length ? ` · ${failed.length} failed: ${failed[0].name} (${failed[0].error})` : ''),
+                    failed.length ? 'error' : 'success'
+                );
+                await Promise.all([loadProfiles(), loadRepositories()]);
+                loadBackups();
+                loadStatus();
+                await loadConfigBackups(configData.selected.id);
+            } catch (e) {
+                showToast('Restore failed', 'error');
+                updateConfigRestoreButton();
+            }
+        }
+
+        async function saveConfigNow() {
+            if (!configRepoId) return;
+            const btn = document.getElementById('configSaveNowBtn');
+            btn.disabled = true;
+            try {
+                const res = await apiFetch(`/api/restic-repositories/${encodeURIComponent(configRepoId)}/config-backups`, { method: 'POST' });
+                const data = await res.json();
+                if (!data.success) {
+                    showToast(`Could not save configuration: ${data.error}`, 'error');
+                    return;
+                }
+                showToast('Configuration saved to the repository', 'success');
+                loadRepositories();
+                await loadConfigBackups();
+            } catch (e) {
+                showToast('Could not save configuration', 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
         // Delete backup
         async function deleteBackup(id) {
             if (!confirm('Are you sure you want to delete this backup?')) return;
@@ -4240,7 +4559,7 @@
         }
 
         function isModalOpen() {
-            return ['profileModal', 'backupModal', 'repositoryModal', 'verifyModal', 'downloadModal'].some(id => {
+            return ['profileModal', 'backupModal', 'repositoryModal', 'verifyModal', 'downloadModal', 'configModal'].some(id => {
                 const modal = document.getElementById(id);
                 return modal && modal.style.display === 'flex';
             });
@@ -4357,6 +4676,24 @@
         document.getElementById('verifyModal').addEventListener('click', (e) => {
             if (e.target.id === 'verifyModal') closeVerifyModal();
         });
+        // Configuration backup modal events
+        document.getElementById('configModalClose').addEventListener('click', closeConfigModal);
+        document.getElementById('configCloseBtn').addEventListener('click', closeConfigModal);
+        document.getElementById('configModal').addEventListener('click', (e) => {
+            if (e.target.id === 'configModal') closeConfigModal();
+        });
+        document.getElementById('configRestoreBtn').addEventListener('click', restoreConfigProfiles);
+        document.getElementById('configSaveNowBtn').addEventListener('click', saveConfigNow);
+        document.getElementById('configSnapshotSelect').addEventListener('change', (e) => loadConfigBackups(e.target.value));
+        document.getElementById('configOverwrite').addEventListener('change', () => renderConfigModal());
+        document.getElementById('configProfilesBody').addEventListener('change', updateConfigRestoreButton);
+        document.getElementById('configSelectAll').addEventListener('change', (e) => {
+            document.querySelectorAll('#configProfilesBody input[type="checkbox"]:not(:disabled)').forEach(box => {
+                box.checked = e.target.checked;
+            });
+            updateConfigRestoreButton();
+        });
+
         // Download modal events
         document.getElementById('downloadModalClose').addEventListener('click', closeDownloadModal);
         document.getElementById('downloadCancelBtn').addEventListener('click', closeDownloadModal);
@@ -4386,7 +4723,8 @@
 
         document.addEventListener('keydown', (e) => {
             if (e.key !== 'Escape') return;
-            if (document.getElementById('downloadModal').style.display === 'flex') closeDownloadModal();
+            if (configModalOpen()) closeConfigModal();
+            else if (document.getElementById('downloadModal').style.display === 'flex') closeDownloadModal();
             else if (document.getElementById('verifyModal').style.display === 'flex') closeVerifyModal();
             else if (document.getElementById('backupModal').style.display === 'flex') cancelBackup();
         });

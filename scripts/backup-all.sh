@@ -80,6 +80,20 @@ queue_post_backup_verification() {
     fi
 }
 
+# Keep a copy of this repository's profiles inside it, so a new server can
+# restore them from the repository alone. Only writes when they changed.
+save_configuration_snapshot() {
+    local repo_id="$1"
+    local result
+    [[ "${CONFIG_SNAPSHOT_ENABLED:-true}" == "true" ]] || return 0
+    if result=$("$SCRIPT_DIR/export-config-snapshot.py" "$repo_id" 2>&1); then
+        [[ "$result" == "saved" ]] && log "Saved configuration snapshot to the repository"
+    else
+        log "Warning: could not save configuration snapshot: $result"
+    fi
+    return 0
+}
+
 ensure_restic_repository() {
     log "Checking restic repository: $RESTIC_REPOSITORY"
     if restic snapshots &>/dev/null; then
@@ -322,6 +336,7 @@ if [[ "$MODE" == "profile" ]]; then
         if [[ "$PROFILE_VERIFY_AFTER_BACKUP" == "true" ]]; then
             queue_post_backup_verification "$NEW_SNAPSHOT_ID"
         fi
+        save_configuration_snapshot "$PROFILE_REPOSITORY_ID"
     else
         log "Warning: no backup files produced for profile $PROFILE_NAME; skipping restic push"
     fi

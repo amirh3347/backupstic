@@ -56,8 +56,10 @@ check_restic_repo() {
         return 1
     fi
 
-    SNAPSHOT_COUNT=$(restic snapshots --json | jq 'length')
-    LAST_SNAPSHOT=$(restic snapshots --latest 1 --json | jq -r '.[0].time')
+    # Configuration snapshots (tag backupstic-config) are not backups.
+    DATA_SNAPSHOTS=$(restic snapshots --json | jq -c '[.[] | select((.tags // []) | index("backupstic-config") | not)]')
+    SNAPSHOT_COUNT=$(jq 'length' <<<"$DATA_SNAPSHOTS")
+    LAST_SNAPSHOT=$(jq -r 'max_by(.time) | .time // "none"' <<<"$DATA_SNAPSHOTS")
     log "Repository OK: $SNAPSHOT_COUNT snapshots, last: $LAST_SNAPSHOT"
     return 0
 }

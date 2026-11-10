@@ -43,6 +43,7 @@ from schedules import (
 )
 from postgres_verify import PostgresRestoreTester
 import plain_export
+import config_backup
 from download_links import (
     DownloadLinkStore,
     job_id_for as download_job_id_for,
@@ -89,6 +90,11 @@ AUTO_VERIFY_POLL_SECONDS = max(0, int(os.environ.get('AUTO_VERIFY_POLL_SECONDS',
 # Wrong repository passwords allowed per user and window for plain downloads.
 PLAIN_DOWNLOAD_MAX_FAILURES = max(1, int(os.environ.get('PLAIN_DOWNLOAD_MAX_FAILURES', 5)))
 PLAIN_DOWNLOAD_FAILURE_WINDOW = max(1, int(os.environ.get('PLAIN_DOWNLOAD_FAILURE_WINDOW', 300)))
+# Disaster recovery: each repository keeps a copy of its own profiles.
+CONFIG_SNAPSHOT_ENABLED = os.environ.get('CONFIG_SNAPSHOT_ENABLED', 'true').strip().lower() not in ('0', 'false', 'no', 'off')
+CONFIG_SNAPSHOT_KEEP = max(0, int(os.environ.get('CONFIG_SNAPSHOT_KEEP', 20)))
+# Background housekeeping cadence (post-backup checks, config snapshots, link cleanup).
+MAINTENANCE_INTERVAL_SECONDS = AUTO_VERIFY_POLL_SECONDS or 15
 # One-time download links: lifetime once the file is ready, how many may be
 # prepared at once (each needs 2-3x the backup size on disk), and when a job
 # whose worker died is given up.
@@ -611,6 +617,7 @@ def create_profile():
     storage = get_storage()
     profile = storage.create(data)
     sync_profile_crontab()
+    mark_config_dirty(profile.get('repository_id'))
     return jsonify({'success': True, 'profile': sanitize_profile(profile)})
 
 @app.route('/api/profiles/<profile_id>', methods=['GET'])
@@ -664,6 +671,7 @@ def update_profile(profile_id):
     if profile is None:
         return jsonify({'success': False, 'error': 'Profile not found'}), 404
     sync_profile_crontab()
+    mark_config_dirty(existing.get('repository_id'), profile.get('repository_id'))
     return jsonify({'success': True, 'profile': sanitize_profile(profile)})
 
 @app.route('/api/profiles/<profile_id>', methods=['DELETE'])
@@ -679,6 +687,7 @@ def delete_profile(profile_id):
     if not success:
         return jsonify({'success': False, 'error': 'Profile not found'}), 404
     sync_profile_crontab()
+    mark_config_dirty(profile.get('repository_id'))
     return jsonify({
         'success': True,
         'message': 'Profile deleted; existing snapshots were preserved',
@@ -704,7 +713,19 @@ def get_config_backup_public_key():
 def list_restic_repositories():
     storage = get_repository_storage()
     repos = storage.get_all()
-    return jsonify({'success': True, 'repositories': [sanitize_repository(r) for r in repos]})
+    state = config_sync_state()
+    items = []
+    for repo in repos:
+        item = sanitize_repository(repo)
+        last = state.last(repo.get('id')) or {}
+        item['config_backup'] = {
+            'enabled': CONFIG_SNAPSHOT_ENABLED,
+            'synced_at': last.get('synced_at'),
+            'profiles': last.get('profiles'),
+            'pending': state.is_dirty(repo.get('id')),
+        }
+        items.append(item)
+    return jsonify({'success': True, 'repositories': items})
 
 @app.route('/api/restic-repositories', methods=['POST'])
 @token_required
@@ -751,6 +772,9 @@ def update_restic_repository(repo_id):
     if not is_valid:
         return jsonify({'success': False, 'error': error_msg}), 400
     repo = storage.update(repo_id, merged)
+    # A new location/password needs a fresh copy of the configuration.
+    config_sync_state().forget(repo_id)
+    mark_config_dirty(repo_id)
     return jsonify({'success': True, 'repository': sanitize_repository(repo)})
 
 @app.route('/api/restic-repositories/<repo_id>', methods=['DELETE'])
@@ -770,6 +794,7 @@ def delete_restic_repository(repo_id):
         }), 409
     if not storage.delete(repo_id):
         return jsonify({'success': False, 'error': 'Repository not found or default repository cannot be deleted'}), 404
+    config_sync_state().forget(repo_id)
     return jsonify({'success': True, 'message': 'Repository deleted successfully'})
 
 @app.route('/api/restic-repositories/<repo_id>/check', methods=['POST'])
@@ -926,7 +951,7 @@ def get_snapshots():
             continue
         for snap in snapshots:
             snap_key = (repo_key, snap.get('id'))
-            if snap_key in seen_snapshots:
+            if snap_key in seen_snapshots or is_config_snapshot(snap):
                 continue
             seen_snapshots.add(snap_key)
             snap['repository_id'] = repo.get('id')
@@ -1530,33 +1555,42 @@ def process_verify_queue_once():
     run_verification_job(store, lock_fd, state, snap, repo)
     return state
 
-def auto_verify_loop():
+def maintenance_loop():
+    try:
+        mark_unsynced_repositories()
+    except Exception:
+        app.logger.exception('Configuration snapshot startup check failed')
     while True:
+        if AUTO_VERIFY_POLL_SECONDS > 0:
+            try:
+                process_verify_queue_once()
+            except Exception:
+                app.logger.exception('Post-backup health check queue failed')
         try:
-            process_verify_queue_once()
+            sync_dirty_configs()
         except Exception:
-            app.logger.exception('Post-backup health check queue failed')
+            app.logger.exception('Configuration snapshot sync failed')
         cleanup_download_links()
-        time.sleep(AUTO_VERIFY_POLL_SECONDS)
+        time.sleep(MAINTENANCE_INTERVAL_SECONDS)
 
 _auto_verify_started = False
 _auto_verify_start_lock = threading.Lock()
 
 @app.before_request
 def ensure_auto_verify_worker():
-    """Start the queue poller in each worker process on its first request.
+    """Start the housekeeping thread in each worker process on its first request.
 
     Started lazily (not at import) so it lives in the gunicorn worker rather
     than a pre-fork parent; the container health check makes the first request.
     """
     global _auto_verify_started
-    if _auto_verify_started or AUTO_VERIFY_POLL_SECONDS <= 0 or app.testing:
+    if _auto_verify_started or app.testing:
         return
     with _auto_verify_start_lock:
         if _auto_verify_started:
             return
         _auto_verify_started = True
-        threading.Thread(target=auto_verify_loop, name='auto-verify', daemon=True).start()
+        threading.Thread(target=maintenance_loop, name='maintenance', daemon=True).start()
 
 @app.route('/api/backup/<backup_id>/verify', methods=['GET'])
 @token_required
@@ -1589,6 +1623,156 @@ def list_backup_verifications():
             'summary': {},
         }
     return jsonify({'success': True, 'verifications': verifications})
+
+# ==================== CONFIGURATION BACKUP (DISASTER RECOVERY) ====================
+
+def is_config_snapshot(snap):
+    return config_backup.CONFIG_TAG in (snap.get('tags') or [])
+
+def config_sync_state():
+    return config_backup.ConfigSyncState(BACKUP_BASE)
+
+def mark_config_dirty(*repo_ids):
+    if not CONFIG_SNAPSHOT_ENABLED:
+        return
+    state = config_sync_state()
+    for repo_id in {config_backup.repo_key(r) for r in repo_ids}:
+        state.mark_dirty(repo_id)
+
+def mark_unsynced_repositories():
+    """After an upgrade (or on a fresh volume) save every used repository's config once."""
+    if not CONFIG_SNAPSHOT_ENABLED:
+        return
+    state = config_sync_state()
+    used = {config_backup.repo_key(p.get('repository_id')) for p in get_storage().get_all()}
+    for repo_id in used:
+        if state.last(repo_id) is None:
+            state.mark_dirty(repo_id)
+
+def save_repository_config(repo, force=False):
+    return config_backup.sync_repository(
+        repo,
+        lambda: get_storage().get_all(),
+        config_sync_state(),
+        restic_env_for_repository(repo),
+        force=force,
+        keep=CONFIG_SNAPSHOT_KEEP,
+    )
+
+def sync_dirty_configs():
+    """Push configuration snapshots for repositories whose profiles changed."""
+    if not CONFIG_SNAPSHOT_ENABLED:
+        return []
+    state = config_sync_state()
+    done = []
+    for repo_id in state.dirty():
+        # Stay out of the way of backups and prunes; retried next tick.
+        if app_backup_state()[0]:
+            break
+        repo = get_repository_storage().get(repo_id)
+        if repo is None:
+            state.forget(repo_id)
+            continue
+        try:
+            done.append((repo_id, save_repository_config(repo)))
+        except config_backup.ConfigBackupError as exc:
+            app.logger.warning('Configuration snapshot for repository %s failed: %s', repo_id, exc)
+    return done
+
+def config_backup_error(exc, status=400):
+    return jsonify({'success': False, 'error': str(exc)}), status
+
+@app.route('/api/restic-repositories/<repo_id>/config-backups', methods=['GET'])
+@token_required
+def list_config_backups(repo_id):
+    """Saved configurations in a repository, plus a restore preview of one of them."""
+    repo = get_repository_storage().get(repo_id)
+    if repo is None:
+        return jsonify({'success': False, 'error': 'Repository not found'}), 404
+    env = restic_env_for_repository(repo)
+    try:
+        snapshots = config_backup.list_config_snapshots(env)
+    except config_backup.ConfigBackupError as exc:
+        return config_backup_error(exc)
+    response = {'success': True, 'snapshots': snapshots, 'selected': None, 'profiles': []}
+    if not snapshots:
+        return jsonify(response)
+
+    wanted = request.args.get('snapshot_id') or snapshots[0]['id']
+    selected = next((s for s in snapshots if s['id'] == wanted or s['id'].startswith(wanted)), None)
+    if selected is None:
+        return jsonify({'success': False, 'error': 'Configuration backup not found'}), 404
+    try:
+        document = config_backup.read_document(env, selected['id'])
+    except config_backup.ConfigBackupError as exc:
+        return config_backup_error(exc)
+    counts = config_backup.snapshot_counts(env)
+    response['selected'] = {
+        **selected,
+        'exported_at': document.get('exported_at'),
+        'repository_name': (document.get('repository') or {}).get('name', ''),
+    }
+    response['profiles'] = config_backup.plan_import(
+        document, get_storage().get_all(), repo.get('id'), validate_profile, counts,
+    )
+    return jsonify(response)
+
+@app.route('/api/restic-repositories/<repo_id>/config-backups', methods=['POST'])
+@token_required
+def save_config_backup(repo_id):
+    """Save this repository's profiles into it now."""
+    repo = get_repository_storage().get(repo_id)
+    if repo is None:
+        return jsonify({'success': False, 'error': 'Repository not found'}), 404
+    try:
+        result = save_repository_config(repo, force=True)
+    except config_backup.ConfigBackupError as exc:
+        return config_backup_error(exc)
+    return jsonify({'success': True, 'result': result, 'config_backup': config_sync_state().last(repo_id)})
+
+@app.route('/api/restic-repositories/<repo_id>/config-backups/restore', methods=['POST'])
+@token_required
+def restore_config_backup(repo_id):
+    """Recreate profiles saved in this repository, keeping their ids.
+
+    Kept ids make the existing snapshots, retention and health history line
+    up with the restored profiles again.
+    """
+    repo = get_repository_storage().get(repo_id)
+    if repo is None:
+        return jsonify({'success': False, 'error': 'Repository not found'}), 404
+    data = request.get_json(silent=True) or {}
+    snapshot_id = data.get('snapshot_id')
+    profile_ids = data.get('profile_ids')
+    if profile_ids is not None and (not isinstance(profile_ids, list) or not all(isinstance(p, str) for p in profile_ids)):
+        return jsonify({'success': False, 'error': 'profile_ids must be a list of ids'}), 400
+    env = restic_env_for_repository(repo)
+    try:
+        if not snapshot_id:
+            snapshots = config_backup.list_config_snapshots(env)
+            if not snapshots:
+                return jsonify({'success': False, 'error': 'This repository has no configuration backup'}), 404
+            snapshot_id = snapshots[0]['id']
+        document = config_backup.read_document(env, str(snapshot_id))
+    except config_backup.ConfigBackupError as exc:
+        return config_backup_error(exc)
+
+    results = config_backup.apply_import(
+        document, get_storage(), repo.get('id'), validate_profile,
+        selected_ids=profile_ids, overwrite=bool(data.get('overwrite')),
+    )
+    changed = [r for r in results if r['result'] in ('restored', 'replaced')]
+    if changed:
+        sync_profile_crontab()
+        mark_config_dirty(repo.get('id'))
+    return jsonify({
+        'success': True,
+        'restored': sum(1 for r in results if r['result'] == 'restored'),
+        'replaced': sum(1 for r in results if r['result'] == 'replaced'),
+        'skipped': sum(1 for r in results if r['result'] == 'skipped'),
+        'failed': sum(1 for r in results if r['result'] == 'failed'),
+        'results': results,
+    })
 
 # ==================== LOGS AND SCHEDULING ENDPOINTS ====================
 
@@ -1676,6 +1860,7 @@ def update_profile_schedule():
         return jsonify({'success': False, 'error': 'Failed to update profile'}), 500
 
     sync_profile_crontab()
+    mark_config_dirty(updated_profile.get('repository_id'))
     return jsonify({'success': True, 'message': 'Profile schedule updated'})
 
 @app.route('/api/retention')
@@ -1724,7 +1909,7 @@ def get_status():
             continue
         for snap in repo_snapshots:
             snap_key = (repo_key, snap.get('id'))
-            if snap_key in seen_snapshots:
+            if snap_key in seen_snapshots or is_config_snapshot(snap):
                 continue
             seen_snapshots.add(snap_key)
             snap['repository_id'] = repo.get('id')

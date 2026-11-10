@@ -551,6 +551,44 @@ Response:
 }
 ```
 
+### Configuration Backup (Disaster Recovery)
+
+هر repository یک کپی از profileهایی که در آن backup می‌گیرند را داخل خودش نگه می‌دارد: یک snapshot کوچک با tag `backupstic-config`، host `backupstic` و فایل `/backupstic-config.json`. این فایل با رمز همان repository رمز شده است (secretهای profile داخلش هستند تا بدون `PROFILE_SECRET_KEY` سرور قبلی هم قابل restore باشد). بعد از هر تغییر profile و بعد از هر backup، فقط اگر محتوا عوض شده باشد نسخه جدید ذخیره می‌شود. این snapshotها در لیست backupها و آمار نمایش داده نمی‌شوند.
+
+```http
+GET /api/restic-repositories/{repo_id}/config-backups[?snapshot_id=...]
+```
+
+لیست نسخه‌های ذخیره‌شده (جدیدترین اول) و پیش‌نمایش restore یک نسخه (پیش‌فرض: جدیدترین):
+
+```json
+{
+  "success": true,
+  "snapshots": [{"id": "...", "short_id": "c21fd092", "time": "..."}],
+  "selected": {"id": "...", "exported_at": "...", "repository_name": "Offsite S3"},
+  "profiles": [
+    {"id": "8683c668-...", "name": "cache", "type": "redis", "schedule": "15 3 * * *", "backups": 12, "status": "new", "error": ""}
+  ]
+}
+```
+
+`status` هر profile: `new` (روی این سرور نیست)، `exists` (با همین id هست)، `name_conflict` (profile دیگری با همین نام و نوع هست)، `invalid`. `backups` تعداد snapshotهای این profile در repository است. secretها در این response برنمی‌گردند.
+
+```http
+POST /api/restic-repositories/{repo_id}/config-backups/restore
+Content-Type: application/json
+
+{"snapshot_id": "<optional>", "profile_ids": ["<optional>"], "overwrite": false}
+```
+
+profileها با همان id قبلی ساخته می‌شوند و `repository_id` آن‌ها به همین repository اشاره می‌کند؛ بنابراین backupهای قبلی، retention و تاریخچه دوباره به آن‌ها وصل می‌شوند. `exists` فقط با `overwrite: true` جایگزین می‌شود و `name_conflict` همیشه رد می‌شود. Response شامل `restored`, `replaced`, `skipped`, `failed` و `results` است.
+
+```http
+POST /api/restic-repositories/{repo_id}/config-backups
+```
+
+همین الان کانفیگ را در repository ذخیره می‌کند. در `GET /api/restic-repositories` هر repository فیلد `config_backup` با `synced_at`, `profiles`, `pending` دارد.
+
 ### Delete Repository Definition
 
 ```http
