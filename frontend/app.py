@@ -6,6 +6,7 @@ import json
 import subprocess
 import datetime
 import fcntl
+import hmac
 import shutil
 import tempfile
 import threading
@@ -40,10 +41,12 @@ from schedules import (
     write_schedule_file,
 )
 from postgres_verify import PostgresRestoreTester
+import plain_export
 from verification import (
     SNAPSHOT_ID_RE,
     Verification,
     VerificationStore,
+    VerifyQueue,
     cleanup_stale_work_dirs,
     new_state as new_verification_state,
     summarize as summarize_verification,
@@ -74,6 +77,12 @@ VERIFY_LOCK_WAIT_SECONDS = max(0, int(os.environ.get('VERIFY_LOCK_WAIT_SECONDS',
 # Optional dedicated PostgreSQL server used to test-restore SQL dumps.
 VERIFY_POSTGRES_URL = os.environ.get('VERIFY_POSTGRES_URL', '').strip()
 VERIFY_POSTGRES_TIMEOUT = max(60, int(os.environ.get('VERIFY_POSTGRES_TIMEOUT', 7200)))
+# How often the dashboard looks for snapshots queued by profiles with
+# "verify after backup" enabled. 0 disables automatic health checks.
+AUTO_VERIFY_POLL_SECONDS = max(0, int(os.environ.get('AUTO_VERIFY_POLL_SECONDS', 15)))
+# Wrong repository passwords allowed per user and window for plain downloads.
+PLAIN_DOWNLOAD_MAX_FAILURES = max(1, int(os.environ.get('PLAIN_DOWNLOAD_MAX_FAILURES', 5)))
+PLAIN_DOWNLOAD_FAILURE_WINDOW = max(1, int(os.environ.get('PLAIN_DOWNLOAD_FAILURE_WINDOW', 300)))
 MANUAL_BACKUP_LOG_MAX_BYTES = max(
     1,
     int(os.environ.get('MANUAL_BACKUP_LOG_MAX_BYTES', 10 * 1024 * 1024)),
@@ -253,20 +262,27 @@ def init_restic_repository(repo):
 def all_repositories():
     return get_repository_storage().get_all()
 
+def find_snapshot_in_repository(snapshot_id, repo):
+    """Return the snapshot with a full or short id from one repository, or None."""
+    res = run_restic_command_with_stale_lock_retry(['snapshots', '--json'], repo=repo, timeout=60)
+    if not res['success'] or not res['stdout']:
+        return None
+    try:
+        snapshots = json.loads(res['stdout'])
+    except (ValueError, TypeError):
+        return None
+    for snap in snapshots:
+        sid = snap.get('id', '')
+        if sid == snapshot_id or sid.startswith(snapshot_id):
+            return snap
+    return None
+
 def find_snapshot(snapshot_id):
     """Return (repository, snapshot) for a full or short snapshot id."""
     for repo in all_repositories():
-        res = run_restic_command_with_stale_lock_retry(['snapshots', '--json'], repo=repo, timeout=60)
-        if not res['success'] or not res['stdout']:
-            continue
-        try:
-            snapshots = json.loads(res['stdout'])
-        except (ValueError, TypeError):
-            continue
-        for snap in snapshots:
-            sid = snap.get('id', '')
-            if sid == snapshot_id or sid.startswith(snapshot_id):
-                return repo, snap
+        snap = find_snapshot_in_repository(snapshot_id, repo)
+        if snap is not None:
+            return repo, snap
     return None, None
 
 def find_snapshot_repository(snapshot_id):
@@ -963,6 +979,7 @@ def delete_backup(backup_id):
     result = run_restic_command_with_stale_lock_retry(['forget', backup_id, '--prune'], repo=repo, timeout=600)
     if result['success']:
         verification_store().delete(snap.get('id', ''))
+        VerifyQueue(BACKUP_BASE).remove(snap.get('id', ''))
         return jsonify({'success': True, 'message': 'Backup deleted successfully'})
     return jsonify({'success': False, 'error': result['stderr']})
 
@@ -1062,6 +1079,107 @@ def download_backup(backup_id):
         mimetype='application/gzip'
     )
 
+_plain_download_failures = {}
+_plain_download_failures_lock = threading.Lock()
+
+def _plain_download_recent_failures(key, now):
+    """Drop expired failures for `key`; caller holds the lock."""
+    recent = [t for t in _plain_download_failures.get(key, []) if now - t < PLAIN_DOWNLOAD_FAILURE_WINDOW]
+    if recent:
+        _plain_download_failures[key] = recent
+    else:
+        _plain_download_failures.pop(key, None)
+    return recent
+
+@app.route('/api/backup/<backup_id>/download-plain', methods=['POST'])
+@token_required
+def download_plain_backup(backup_id):
+    """Return the snapshot's own files as one unencrypted gzip download.
+
+    Requires the password of the repository that encrypts the snapshot: the
+    result is no longer protected by restic, so a dashboard session alone is
+    not enough to take the data out in the clear.
+    """
+    if not SNAPSHOT_ID_RE.fullmatch(backup_id):
+        return jsonify({'success': False, 'error': 'Invalid snapshot id'}), 400
+    data = request.get_json(silent=True) or {}
+    password = data.get('password')
+    if not isinstance(password, str) or not password:
+        return jsonify({'success': False, 'error': 'Repository password is required'}), 400
+
+    user = getattr(request, 'current_user', '') or ''
+    now = time.monotonic()
+    with _plain_download_failures_lock:
+        recent = _plain_download_recent_failures(user, now)
+        if len(recent) >= PLAIN_DOWNLOAD_MAX_FAILURES:
+            retry_after = int(PLAIN_DOWNLOAD_FAILURE_WINDOW - (now - recent[0])) + 1
+            response = jsonify({
+                'success': False,
+                'error': f'Too many wrong passwords. Try again in {retry_after} seconds.',
+            })
+            response.headers['Retry-After'] = str(retry_after)
+            return response, 429
+
+    repo, snap = find_snapshot(backup_id)
+    if repo is None:
+        return jsonify({'success': False, 'error': 'Snapshot not found'}), 404
+
+    expected = repo.get('password', RESTIC_PASSWORD) or ''
+    if not expected or not hmac.compare_digest(password.encode(), expected.encode()):
+        with _plain_download_failures_lock:
+            recent = _plain_download_recent_failures(user, now)
+            recent.append(now)
+            _plain_download_failures[user] = recent
+            attempts_left = max(0, PLAIN_DOWNLOAD_MAX_FAILURES - len(recent))
+        app.logger.warning('Rejected plain download of %s: wrong repository password', backup_id[:8])
+        return jsonify({
+            'success': False,
+            'error': 'Wrong repository password',
+            'attempts_left': attempts_left,
+        }), 403
+    with _plain_download_failures_lock:
+        _plain_download_failures.pop(user, None)
+
+    snap['repository_id'] = repo.get('id')
+    snap = (apply_profile_snapshot_policy([snap]) or [snap])[0]
+    size = snapshot_size(snap)
+    if size:
+        needed = size * 2 + 64 * 1024 * 1024
+        free = shutil.disk_usage(BACKUP_BASE).free
+        if free < needed:
+            return jsonify({
+                'success': False,
+                'error': f'Not enough free disk space: needs about {format_bytes(needed)}, '
+                         f'only {format_bytes(free)} is available',
+            }), 507
+
+    work = tempfile.mkdtemp(prefix='download_', dir=BACKUP_BASE)
+    restore_dir = os.path.join(work, 'data')
+
+    def cleanup():
+        shutil.rmtree(work, ignore_errors=True)
+
+    res = restore_snapshot(snap['id'], repo, restore_dir)
+    if not res['success']:
+        cleanup()
+        return jsonify({'success': False, 'error': res['stderr'] or 'Restore failed'}), 500
+
+    try:
+        path, download_name = plain_export.build(restore_dir, snap, work)
+    except plain_export.PlainExportError as exc:
+        cleanup()
+        return jsonify({'success': False, 'error': str(exc)}), 500
+    except Exception:
+        cleanup()
+        raise
+
+    @after_this_request
+    def _remove(response):
+        cleanup()
+        return response
+
+    return send_file(path, as_attachment=True, download_name=download_name, mimetype='application/gzip')
+
 # ==================== BACKUP VERIFICATION ENDPOINTS ====================
 
 def verification_store():
@@ -1073,6 +1191,13 @@ def open_bundle_repository(args, repo_path, timeout, password, wrong_password=Fa
         'password': os.urandom(16).hex() if wrong_password else password,
     }
     return run_restic_command(['--no-cache', *args], repo=bundle_repo, timeout=timeout)
+
+def prepare_verification(snap, repo, requested_by='', trigger='manual'):
+    """Enrich a snapshot for verification and build its initial job state."""
+    snap['repository_id'] = repo.get('id')
+    snap['size'] = snapshot_size(snap)
+    snap = (apply_profile_snapshot_policy([snap]) or [snap])[0]
+    return snap, new_verification_state(snap, repo, requested_by=requested_by, trigger=trigger)
 
 def run_verification_job(store, lock_fd, state, snap, repo):
     try:
@@ -1129,10 +1254,7 @@ def start_backup_verification(backup_id):
         }), 409
 
     try:
-        snap['repository_id'] = repo.get('id')
-        snap['size'] = snapshot_size(snap)
-        snap = (apply_profile_snapshot_policy([snap]) or [snap])[0]
-        state = new_verification_state(snap, repo, requested_by=getattr(request, 'current_user', ''))
+        snap, state = prepare_verification(snap, repo, requested_by=getattr(request, 'current_user', ''))
         store.save(state)
         # Serialize before the job thread starts mutating state.
         response = jsonify({'success': True, 'verification': state})
@@ -1146,6 +1268,71 @@ def start_backup_verification(backup_id):
         VerificationStore.release(lock_fd)
         raise
     return response, 202
+
+def process_verify_queue_once():
+    """Run the oldest queued post-backup health check, if nothing else is busy.
+
+    Returns the finished verification state, or None when there was nothing to
+    do (empty queue, a backup or another check is running, snapshot gone).
+    Every dashboard worker polls; the verification lock lets only one run.
+    """
+    queue = VerifyQueue(BACKUP_BASE)
+    items = queue.pending()
+    if not items:
+        return None
+    # A batch backs up profiles one after another; start once the batch is idle
+    # so the restore step does not sit waiting for the next profile's backup.
+    if app_backup_state()[0]:
+        return None
+    store = verification_store()
+    lock_fd = store.try_acquire()
+    if lock_fd is None:
+        return None
+    try:
+        item = items[0]
+        snapshot_id = item['snapshot_id']
+        queue.remove(snapshot_id)
+        repo = get_repository_storage().get(item.get('repository_id') or 'default')
+        snap = find_snapshot_in_repository(snapshot_id, repo) if repo else None
+        if snap is None:
+            app.logger.warning('Skipping post-backup health check of %s: snapshot not found', snapshot_id[:8])
+            VerificationStore.release(lock_fd)
+            return None
+        snap, state = prepare_verification(snap, repo, requested_by='after-backup', trigger='after_backup')
+        store.save(state)
+    except Exception:
+        VerificationStore.release(lock_fd)
+        raise
+    app.logger.info('Running post-backup health check of %s', state['short_id'])
+    run_verification_job(store, lock_fd, state, snap, repo)
+    return state
+
+def auto_verify_loop():
+    while True:
+        try:
+            process_verify_queue_once()
+        except Exception:
+            app.logger.exception('Post-backup health check queue failed')
+        time.sleep(AUTO_VERIFY_POLL_SECONDS)
+
+_auto_verify_started = False
+_auto_verify_start_lock = threading.Lock()
+
+@app.before_request
+def ensure_auto_verify_worker():
+    """Start the queue poller in each worker process on its first request.
+
+    Started lazily (not at import) so it lives in the gunicorn worker rather
+    than a pre-fork parent; the container health check makes the first request.
+    """
+    global _auto_verify_started
+    if _auto_verify_started or AUTO_VERIFY_POLL_SECONDS <= 0 or app.testing:
+        return
+    with _auto_verify_start_lock:
+        if _auto_verify_started:
+            return
+        _auto_verify_started = True
+        threading.Thread(target=auto_verify_loop, name='auto-verify', daemon=True).start()
 
 @app.route('/api/backup/<backup_id>/verify', methods=['GET'])
 @token_required
@@ -1161,10 +1348,23 @@ def get_backup_verification(backup_id):
 def list_backup_verifications():
     """Latest verification summary for every snapshot that has been checked."""
     states = verification_store().all()
-    return jsonify({
-        'success': True,
-        'verifications': {s['snapshot_id']: summarize_verification(s) for s in states},
-    })
+    verifications = {s['snapshot_id']: summarize_verification(s) for s in states}
+    # Snapshots waiting for their automatic post-backup check.
+    for item in VerifyQueue(BACKUP_BASE).pending():
+        sid = item['snapshot_id']
+        existing = verifications.get(sid)
+        if existing and str(existing.get('started_at') or '') >= str(item.get('queued_at') or ''):
+            continue
+        verifications[sid] = {
+            'snapshot_id': sid,
+            'short_id': sid[:8],
+            'status': 'scheduled',
+            'trigger': 'after_backup',
+            'started_at': item.get('queued_at'),
+            'finished_at': None,
+            'summary': {},
+        }
+    return jsonify({'success': True, 'verifications': verifications})
 
 # ==================== LOGS AND SCHEDULING ENDPOINTS ====================
 

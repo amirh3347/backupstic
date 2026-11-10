@@ -23,7 +23,7 @@ os.environ.setdefault('PROFILES_STORAGE', os.path.join(_runtime.name, 'profiles.
 os.environ.setdefault('RESTIC_REPOSITORIES_STORAGE', os.path.join(_runtime.name, 'repositories.json'))
 
 import frontend.app as app_module  # noqa: E402
-from backend.verification import VerificationStore, inspect_archive  # noqa: E402
+from backend.verification import VerificationStore, VerifyQueue, inspect_archive  # noqa: E402
 
 PG_DUMP = (
     b'--\n-- PostgreSQL database dump\n--\n\nCREATE TABLE t (id int);\n'
@@ -128,6 +128,26 @@ class VerificationStoreTests(unittest.TestCase):
                 self.assertEqual(store.find(snapshot_id[:8])['status'], 'running')
             finally:
                 VerificationStore.release(fd)
+
+    def test_verify_queue_orders_and_drops_invalid_entries(self):
+        with tempfile.TemporaryDirectory() as base:
+            queue = VerifyQueue(base)
+            first, second = 'a' * 64, 'b' * 64
+            queue.enqueue(first, 'default', profile_name='one')
+            time.sleep(0.01)
+            queue.enqueue(second, 'other')
+            (queue.root / ('c' * 64 + '.json')).write_text('{"snapshot_id": "mismatch"}')
+            (queue.root / '.tmp.partial').write_text('{')
+
+            items = queue.pending()
+
+            self.assertEqual([item['snapshot_id'] for item in items], [first, second])
+            self.assertEqual(items[1]['repository_id'], 'other')
+            self.assertFalse((queue.root / ('c' * 64 + '.json')).exists())
+            queue.remove(first)
+            self.assertEqual([item['snapshot_id'] for item in queue.pending()], [second])
+            with self.assertRaises(ValueError):
+                queue.enqueue('../x')
 
     def test_rejects_ids_that_are_not_snapshot_hashes(self):
         with tempfile.TemporaryDirectory() as base:
@@ -252,6 +272,101 @@ class EndToEndVerificationTests(unittest.TestCase):
             names = bundle.getnames()
         self.assertIn('README_DECRYPT.txt', names)
         self.assertIn('encrypted-restic-repo/config', names)
+
+    def plain_download(self, snapshot_id, password):
+        response = self.client.post(
+            f'/api/backup/{snapshot_id[:8]}/download-plain',
+            headers=self.headers,
+            json={'password': password},
+        )
+        self.addCleanup(response.close)
+        return response
+
+    def test_plain_download_requires_repository_password(self):
+        staging = self.base / '.staging' / 'e2e'
+        write_healthy_backup(staging)
+        snapshot_id = self.snapshot(staging)
+        app_module._plain_download_failures.clear()
+        self.addCleanup(app_module._plain_download_failures.clear)
+
+        self.assertEqual(self.plain_download(snapshot_id, '').status_code, 400)
+        wrong = self.plain_download(snapshot_id, 'not-the-password')
+        self.assertEqual(wrong.status_code, 403)
+        self.assertEqual(wrong.get_json()['attempts_left'], app_module.PLAIN_DOWNLOAD_MAX_FAILURES - 1)
+
+        response = self.plain_download(snapshot_id, self.password)
+
+        self.assertEqual(response.status_code, 200, response.get_data()[:500])
+        self.assertIn(f'_{snapshot_id[:8]}.tar.gz', response.headers['Content-Disposition'])
+        with tarfile.open(fileobj=io.BytesIO(response.get_data()), mode='r:gz') as archive:
+            names = sorted(archive.getnames())
+            dump = archive.extractfile('app_20260101_000000.sql.gz').read()
+        # The backup files sit at the top level: no restic repo, no staging path.
+        self.assertEqual(names, sorted(os.listdir(staging)))
+        self.assertEqual(gzip.decompress(dump), PG_DUMP)
+        self.assertFalse([name for name in os.listdir(self.base) if name.startswith('download_')])
+
+    def test_plain_download_of_single_dump_is_the_dump_itself(self):
+        staging = self.base / '.staging' / 'e2e'
+        staging.mkdir(parents=True)
+        (staging / 'app_20260101_000000.sql.gz').write_bytes(gzip.compress(PG_DUMP))
+        snapshot_id = self.snapshot(staging)
+
+        response = self.plain_download(snapshot_id, self.password)
+
+        self.assertEqual(response.status_code, 200, response.get_data()[:500])
+        self.assertIn('app_20260101_000000.sql.gz', response.headers['Content-Disposition'])
+        self.assertEqual(gzip.decompress(response.get_data()), PG_DUMP)
+
+    def test_plain_download_locks_out_after_repeated_wrong_passwords(self):
+        staging = self.base / '.staging' / 'e2e'
+        write_healthy_backup(staging)
+        snapshot_id = self.snapshot(staging)
+        app_module._plain_download_failures.clear()
+        self.addCleanup(app_module._plain_download_failures.clear)
+
+        with patch.object(app_module, 'PLAIN_DOWNLOAD_MAX_FAILURES', 2):
+            self.assertEqual(self.plain_download(snapshot_id, 'wrong-1').status_code, 403)
+            self.assertEqual(self.plain_download(snapshot_id, 'wrong-2').status_code, 403)
+            locked = self.plain_download(snapshot_id, self.password)
+
+        self.assertEqual(locked.status_code, 429)
+        self.assertIn('Retry-After', locked.headers)
+
+    def test_queued_snapshot_is_verified_automatically(self):
+        staging = self.base / '.staging' / 'e2e'
+        write_healthy_backup(staging)
+        snapshot_id = self.snapshot(staging)
+        storage = app_module.get_repository_storage()
+        storage.create(dict(self.repo))
+        self.addCleanup(storage.delete, 'e2e')
+        VerifyQueue(str(self.base)).enqueue(snapshot_id, 'e2e', profile_name='e2e')
+
+        listing = self.client.get('/api/verifications', headers=self.headers).get_json()
+        self.assertEqual(listing['verifications'][snapshot_id]['status'], 'scheduled')
+
+        state = app_module.process_verify_queue_once()
+
+        self.assertIsNotNone(state)
+        self.assertEqual(state['status'], 'passed', json.dumps(state, indent=2))
+        self.assertEqual(state['trigger'], 'after_backup')
+        self.assertEqual(VerifyQueue(str(self.base)).pending(), [])
+        self.assertIsNone(app_module.process_verify_queue_once())
+        listing = self.client.get('/api/verifications', headers=self.headers).get_json()
+        self.assertEqual(listing['verifications'][snapshot_id]['status'], 'passed')
+        self.assertEqual(listing['verifications'][snapshot_id]['trigger'], 'after_backup')
+
+    def test_queue_waits_while_a_backup_is_running(self):
+        import fcntl
+
+        staging = self.base / '.staging' / 'e2e'
+        write_healthy_backup(staging)
+        snapshot_id = self.snapshot(staging)
+        VerifyQueue(str(self.base)).enqueue(snapshot_id, 'e2e')
+        with open(self.base / 'backup.lock', 'w') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            self.assertIsNone(app_module.process_verify_queue_once())
+        self.assertEqual(len(VerifyQueue(str(self.base)).pending()), 1)
 
     def test_waits_for_running_backup_and_times_out(self):
         import fcntl

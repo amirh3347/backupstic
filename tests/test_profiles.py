@@ -41,6 +41,23 @@ class ProfileStorageTests(unittest.TestCase):
         valid, _ = validate_profile(candidate)
         self.assertFalse(valid)
 
+    def test_verify_after_backup_is_optional_and_normalized(self):
+        base = {
+            'name': 'cache',
+            'type': 'redis',
+            'host': 'redis.internal',
+            'port': 6379,
+            'schedule': '0 2 * * *',
+        }
+        profile = dict(base)
+        self.assertEqual(validate_profile(profile), (True, ''))
+        self.assertIs(profile['verify_after_backup'], False)
+
+        for raw, expected in ((True, True), ('true', True), ('off', False), (0, False)):
+            profile = dict(base, verify_after_backup=raw)
+            self.assertEqual(validate_profile(profile), (True, ''))
+            self.assertIs(profile['verify_after_backup'], expected, raw)
+
 
 if __name__ == '__main__':
     unittest.main()

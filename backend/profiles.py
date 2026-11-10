@@ -186,19 +186,19 @@ class ProfileStorage:
 PROFILE_TYPES = {
     "postgresql": {
         "required": ["name", "type", "host", "port", "username", "password", "databases", "schedule"],
-        "optional": ["description", "enabled", "max_backups", "repository_id"]
+        "optional": ["description", "enabled", "max_backups", "repository_id", "verify_after_backup"]
     },
     "redis": {
         "required": ["name", "type", "host", "port", "schedule"],
-        "optional": ["description", "enabled", "databases", "password", "max_backups", "repository_id"]
+        "optional": ["description", "enabled", "databases", "password", "max_backups", "repository_id", "verify_after_backup"]
     },
     "mongodb": {
         "required": ["name", "type", "host", "port", "databases", "schedule"],
-        "optional": ["description", "enabled", "username", "password", "max_backups", "repository_id"]
+        "optional": ["description", "enabled", "username", "password", "max_backups", "repository_id", "verify_after_backup"]
     },
     "ssh_files": {
         "required": ["name", "type", "ssh_host", "ssh_port", "ssh_user", "schedule"],
-        "optional": ["description", "enabled", "auth_method", "ssh_password", "paths", "exclude_patterns", "path_configs", "preserve_metadata", "log_rsync_output", "max_backups", "repository_id"]
+        "optional": ["description", "enabled", "auth_method", "ssh_password", "paths", "exclude_patterns", "path_configs", "preserve_metadata", "log_rsync_output", "max_backups", "repository_id", "verify_after_backup"]
     }
 }
 
@@ -245,6 +245,11 @@ def validate_profile(profile: Dict[str, Any]) -> tuple[bool, str]:
     if max_backups < 0:
         return False, "max_backups cannot be negative"
     profile["max_backups"] = max_backups
+
+    verify_after_backup = profile.get("verify_after_backup", False)
+    if isinstance(verify_after_backup, str):
+        verify_after_backup = verify_after_backup.strip().lower() in {"1", "true", "yes", "on"}
+    profile["verify_after_backup"] = bool(verify_after_backup)
 
     # Type-specific validations
     if profile_type == "postgresql":

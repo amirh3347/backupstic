@@ -540,6 +540,22 @@
         .status-enabled { background: var(--green-soft); color: var(--green-text); }
         .status-disabled { background: var(--neutral-soft); color: var(--faint); }
 
+        .profile-flag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 5px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--green-text);
+            white-space: nowrap;
+        }
+
+        .profile-flag .icon {
+            width: 12px;
+            height: 12px;
+        }
+
         /* ---------- Buttons ---------- */
         .btn-group {
             display: flex;
@@ -733,7 +749,8 @@
         .health-interrupted { color: var(--amber-text); background: var(--amber-soft); border-color: var(--amber-line); }
         .health-failed { color: var(--red-text); background: var(--red-soft); border-color: var(--red-line); }
         .health-running,
-        .health-queued { color: var(--blue-text); background: var(--blue-soft); border-color: var(--blue-line); }
+        .health-queued,
+        .health-scheduled { color: var(--blue-text); background: var(--blue-soft); border-color: var(--blue-line); }
 
         .spinner,
         .mini-spinner {
@@ -903,6 +920,87 @@
 
         .modal-md {
             width: min(860px, 100%);
+        }
+
+        .modal-sm {
+            width: min(560px, 100%);
+        }
+
+        .option-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 12px 14px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: border-color 0.12s, background 0.12s;
+        }
+
+        .option-card + .option-card {
+            margin-top: 10px;
+        }
+
+        .option-card:hover {
+            border-color: var(--blue-line);
+        }
+
+        .option-card:has(input:checked) {
+            border-color: var(--blue);
+            background: var(--blue-soft);
+        }
+
+        .option-card input {
+            margin-top: 3px;
+            accent-color: var(--blue);
+            flex-shrink: 0;
+        }
+
+        .option-card strong {
+            display: block;
+            font-size: 14px;
+            font-weight: 650;
+            color: var(--text);
+        }
+
+        .option-card span {
+            display: block;
+            margin-top: 3px;
+            font-size: 12.5px;
+            line-height: 1.45;
+            color: var(--muted);
+        }
+
+        .option-card code {
+            font-family: var(--mono);
+            font-size: 12px;
+        }
+
+        .download-password {
+            margin-top: 16px;
+        }
+
+        .form-error {
+            margin-top: 6px;
+            min-height: 18px;
+            color: var(--red-text);
+            font-size: 12.5px;
+        }
+
+        .verify-toggle {
+            border: 1px solid var(--border-soft);
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin-bottom: 16px;
+        }
+
+        .verify-toggle .checkbox-group {
+            margin-bottom: 0;
+            font-weight: 600;
+        }
+
+        .verify-toggle .form-hint {
+            margin: 4px 0 0 25px;
         }
 
         .modal-header {
@@ -1885,6 +1983,14 @@
                         <label for="profileRepository">Restic Repository</label>
                         <select id="profileRepository"></select>
                     </div>
+
+                    <div class="verify-toggle form-span-2">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="profileVerifyAfterBackup">
+                            <label for="profileVerifyAfterBackup">Run a health check after every backup</label>
+                        </div>
+                        <p class="form-hint">Each new snapshot is restored, decrypted and every archive in it tested automatically, like the Verify button. The result shows up in the Health column. Needs about 3× the backup size in temporary disk space.</p>
+                    </div>
                     
                     <!-- PostgreSQL Fields -->
                     <div id="postgresqlFields" class="type-fields">
@@ -2149,6 +2255,48 @@
         </div>
     </div>
 
+    <div id="downloadModal" class="modal-overlay">
+        <div class="modal modal-sm" role="dialog" aria-modal="true" aria-labelledby="downloadModalTitle">
+            <div class="modal-header">
+                <div>
+                    <h2 id="downloadModalTitle">Download Backup</h2>
+                    <div class="verify-meta" id="downloadMeta"></div>
+                </div>
+                <button class="btn-close" id="downloadModalClose" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="downloadForm" autocomplete="off">
+                    <label class="option-card">
+                        <input type="radio" name="downloadFormat" value="plain" checked>
+                        <div>
+                            <strong>Ready-to-use archive</strong>
+                            <span>The backup files themselves in one gzip file: no restic, no password and no wrapper folders. A single dump is downloaded as-is (for example <code>app_….sql.gz</code>).</span>
+                        </div>
+                    </label>
+                    <label class="option-card">
+                        <input type="radio" name="downloadFormat" value="encrypted">
+                        <div>
+                            <strong>Encrypted restic bundle</strong>
+                            <span>A restic repository protected by the repository password. Open it with restic (see <code>README_DECRYPT.txt</code> inside).</span>
+                        </div>
+                    </label>
+
+                    <div class="form-group download-password" id="downloadPasswordGroup">
+                        <label for="downloadPassword">Repository password</label>
+                        <input type="password" id="downloadPassword" name="backup-repository-password" autocomplete="off" spellcheck="false">
+                        <p class="form-hint" id="downloadPasswordHint">Enter the password of the repository that encrypts this profile's backups. The file is decrypted on the server and downloaded unencrypted — keep it somewhere safe.</p>
+                        <div class="form-error" id="downloadError" role="alert"></div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-outline" id="downloadCancelBtn">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="downloadSubmitBtn"><svg class="icon"><use href="#i-download"/></svg>Download</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <div id="toast" class="toast" style="display: none;" role="status" aria-live="polite"></div>
 
     <script>
@@ -2228,7 +2376,7 @@
             sessionStorage.removeItem('authToken');
             authToken = null;
             stopPolling();
-            ['profileModal', 'backupModal', 'repositoryModal', 'verifyModal'].forEach(id => {
+            ['profileModal', 'backupModal', 'repositoryModal', 'verifyModal', 'downloadModal'].forEach(id => {
                 document.getElementById(id).style.display = 'none';
             });
             document.getElementById('login-notice').textContent = 'Your session has expired. Please sign in again.';
@@ -2568,7 +2716,10 @@
                             <td>${escapeHtml(repositoryName(p.repository_id))}</td>
                             <td>${p.max_backups > 0 ? escapeHtml(p.max_backups) : 'Global'}</td>
                             <td><span class="mono">${escapeHtml(p.schedule || 'Not set')}</span></td>
-                            <td><span class="profile-status ${statusClass(p.enabled)}">${statusText(p.enabled)}</span></td>
+                            <td>
+                                <span class="profile-status ${statusClass(p.enabled)}">${statusText(p.enabled)}</span>
+                                ${p.verify_after_backup ? `<div class="profile-flag" title="Every new backup is health-checked automatically">${svgIcon('shield')}Auto-verify</div>` : ''}
+                            </td>
                             <td>
                                 <div class="btn-group">
                                     <button class="btn btn-sm btn-outline" onclick="editProfile('${p.id}')">Edit</button>
@@ -2943,7 +3094,7 @@
                             <td>
                                 <div class="btn-group">
                                     <button class="btn btn-sm btn-verify" onclick="verifyBackup('${sid}')" ${verifyBusy ? 'disabled title="Another health check is running"' : 'title="Restore, decrypt and test this backup"'}><svg class="icon"><use href="#i-shield"/></svg>Verify</button>
-                                    <button class="btn btn-sm btn-outline btn-icon" onclick="downloadBackup('${shortId(snap.id)}')" title="Download encrypted bundle" aria-label="Download"><svg class="icon"><use href="#i-download"/></svg></button>
+                                    <button class="btn btn-sm btn-outline btn-icon" onclick="openDownload('${sid}')" title="Download backup" aria-label="Download"><svg class="icon"><use href="#i-download"/></svg></button>
                                     <button class="btn btn-sm btn-outline btn-danger btn-icon" onclick="deleteBackup('${shortId(snap.id)}')" title="Delete backup" aria-label="Delete"><svg class="icon"><use href="#i-trash"/></svg></button>
                                 </div>
                             </td>
@@ -3073,6 +3224,7 @@
             document.getElementById('profileEnabled').checked = profile.enabled !== false;
             document.getElementById('profileSchedule').value = profile.schedule || '';
             document.getElementById('profileMaxBackups').value = profile.max_backups || 0;
+            document.getElementById('profileVerifyAfterBackup').checked = !!profile.verify_after_backup;
             populateRepositorySelect(profile.repository_id || 'default');
             
             // Show/hide type-specific fields
@@ -3149,7 +3301,8 @@
                 enabled: document.getElementById('profileEnabled').checked,
                 schedule: document.getElementById('profileSchedule').value.trim(),
                 max_backups: parseInt(document.getElementById('profileMaxBackups').value, 10) || 0,
-                repository_id: document.getElementById('profileRepository').value || 'default'
+                repository_id: document.getElementById('profileRepository').value || 'default',
+                verify_after_backup: document.getElementById('profileVerifyAfterBackup').checked
             };
             
             // Validate required fields
@@ -3384,32 +3537,128 @@
             }
         }
 
-        // Download backup (restore -> tar.gz streamed by the backend).
-        // Uses fetch+blob because a plain <a href> can't send the auth header.
-        async function downloadBackup(id) {
+        // ==================== Downloads ====================
+        // Two formats: a plain gzip of the backup files (needs the repository
+        // password) or the encrypted restic bundle. Both use fetch+blob because
+        // a plain <a href> can't send the auth header.
+        let downloadSnapshotId = null;
+        let downloadInFlight = false;
+
+        function downloadFormat() {
+            const checked = document.querySelector('input[name="downloadFormat"]:checked');
+            return checked ? checked.value : 'plain';
+        }
+
+        function updateDownloadForm() {
+            const plain = downloadFormat() === 'plain';
+            document.getElementById('downloadPasswordGroup').style.display = plain ? 'block' : 'none';
+            document.getElementById('downloadError').textContent = '';
+            if (plain) document.getElementById('downloadPassword').focus();
+        }
+
+        function setDownloadBusy(busy) {
+            downloadInFlight = busy;
+            const btn = document.getElementById('downloadSubmitBtn');
+            btn.disabled = busy;
+            btn.innerHTML = busy
+                ? '<span class="mini-spinner"></span>Preparing…'
+                : `${svgIcon('download')}Download`;
+        }
+
+        function openDownload(snapshotId) {
+            const snap = backupsAll.find(item => item.id === snapshotId) || { id: snapshotId };
+            downloadSnapshotId = snapshotId;
+            const meta = [
+                snapProfileName(snap),
+                shortId(snapshotId),
+                snap.time ? formatDate(snap.time) : '',
+                snap.size ? formatBytes(snap.size) : ''
+            ].filter(Boolean).map(escapeHtml);
+            document.getElementById('downloadMeta').innerHTML = meta.map(item => `<span>${item}</span>`).join('<span>·</span>');
+            const repoName = snapRepositoryName(snap);
+            document.getElementById('downloadPasswordHint').textContent =
+                `Password of the "${repoName}" repository, which encrypts this profile's backups. ` +
+                'The file is decrypted on the server and downloaded unencrypted — keep it somewhere safe.';
+            document.getElementById('downloadPassword').value = '';
+            if (!downloadInFlight) setDownloadBusy(false);
+            document.getElementById('downloadModal').style.display = 'flex';
+            updateDownloadForm();
+        }
+
+        function closeDownloadModal() {
+            document.getElementById('downloadModal').style.display = 'none';
+            document.getElementById('downloadPassword').value = '';
+            document.getElementById('downloadError').textContent = '';
+        }
+
+        function filenameFromResponse(res, fallback) {
+            const header = res.headers.get('Content-Disposition') || '';
+            const encoded = header.match(/filename\*=UTF-8''([^;]+)/i);
+            if (encoded) {
+                try { return decodeURIComponent(encoded[1]); } catch (_) {}
+            }
+            const plain = header.match(/filename="?([^";]+)"?/i);
+            return plain ? plain[1] : fallback;
+        }
+
+        async function saveBlobResponse(res, fallbackName) {
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filenameFromResponse(res, fallbackName);
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        async function submitDownload() {
+            if (downloadInFlight || !downloadSnapshotId) return;
+            const id = downloadSnapshotId;
+            const plain = downloadFormat() === 'plain';
+            const errorEl = document.getElementById('downloadError');
+            const password = document.getElementById('downloadPassword').value;
+            errorEl.textContent = '';
+            if (plain && !password) {
+                errorEl.textContent = 'Enter the repository password';
+                document.getElementById('downloadPassword').focus();
+                return;
+            }
+
+            setDownloadBusy(true);
             showToast('Preparing download… restoring the snapshot may take a while', 'info');
             try {
-                const res = await apiFetch(`/api/backup/${id}/download`, {
-                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-                });
+                const res = plain
+                    ? await apiFetch(`/api/backup/${encodeURIComponent(id)}/download-plain`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password })
+                    })
+                    : await apiFetch(`/api/backup/${encodeURIComponent(shortId(id))}/download`);
                 if (!res.ok) {
                     let msg = `HTTP ${res.status}`;
-                    try { const e = await res.json(); msg = e.error || msg; } catch (_) {}
+                    let data = {};
+                    try { data = await res.json(); msg = data.error || msg; } catch (_) {}
+                    if (res.status === 403 && typeof data.attempts_left === 'number') {
+                        msg += data.attempts_left > 0
+                            ? ` · ${data.attempts_left} ${data.attempts_left === 1 ? 'attempt' : 'attempts'} left`
+                            : ' · no attempts left for a few minutes';
+                    }
+                    if (document.getElementById('downloadModal').style.display === 'flex' && downloadSnapshotId === id) {
+                        errorEl.textContent = msg;
+                        if (res.status === 403) document.getElementById('downloadPassword').select();
+                    }
                     showToast(`Download failed: ${msg}`, 'error');
                     return;
                 }
-                const blob = await res.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `backup_${id}.restic.tar.gz`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                URL.revokeObjectURL(url);
+                await saveBlobResponse(res, plain ? `backup_${shortId(id)}.tar.gz` : `backup_${shortId(id)}.restic.tar.gz`);
+                if (downloadSnapshotId === id) closeDownloadModal();
                 showToast('Download ready', 'success');
             } catch (e) {
                 showToast('Download failed', 'error');
+            } finally {
+                setDownloadBusy(false);
             }
         }
 
@@ -3446,7 +3695,8 @@
             passed: { label: 'Healthy', icon: 'check' },
             warning: { label: 'Warnings', icon: 'alert' },
             failed: { label: 'Failed', icon: 'x' },
-            interrupted: { label: 'Interrupted', icon: 'alert' }
+            interrupted: { label: 'Interrupted', icon: 'alert' },
+            scheduled: { label: 'Check queued', icon: 'clock' }
         };
 
         function svgIcon(name) {
@@ -3480,8 +3730,12 @@
             }
             const meta = VERIFY_STATUS[v.status] || { label: v.status, icon: null };
             const icon = meta.icon ? svgIcon(meta.icon) : (VERIFY_ACTIVE.includes(v.status) ? '<span class="mini-spinner"></span>' : '');
+            if (v.status === 'scheduled') {
+                return `<span class="health-badge health-scheduled" title="Automatic health check starts once running backups finish (queued ${escapeHtml(relativeTime(v.started_at))})">${icon}${escapeHtml(meta.label)}</span>`;
+            }
+            const auto = v.trigger === 'after_backup' ? ' (automatic, after backup)' : '';
             const when = v.finished_at ? `Checked ${relativeTime(v.finished_at)}` : `Started ${relativeTime(v.started_at)}`;
-            return `<button type="button" class="health-badge health-${escapeHtml(v.status)}" onclick="openVerification('${escapeHtml(snap.id)}')" title="${escapeHtml(when)} — click for the report">${icon}${escapeHtml(meta.label)}</button>`;
+            return `<button type="button" class="health-badge health-${escapeHtml(v.status)}" onclick="openVerification('${escapeHtml(snap.id)}')" title="${escapeHtml(when + auto)} — click for the report">${icon}${escapeHtml(meta.label)}</button>`;
         }
 
         async function loadVerifications() {
@@ -3607,7 +3861,8 @@
                 state.profile_name,
                 state.short_id,
                 state.snapshot_time ? formatDate(state.snapshot_time) : '',
-                state.repository_name
+                state.repository_name,
+                state.trigger === 'after_backup' ? 'Automatic after backup' : ''
             ].filter(Boolean).map(escapeHtml);
             document.getElementById('verifyMeta').innerHTML = meta.map(item => `<span>${item}</span>`).join('<span>·</span>');
 
@@ -3790,7 +4045,7 @@
         }
 
         function isModalOpen() {
-            return ['profileModal', 'backupModal', 'repositoryModal', 'verifyModal'].some(id => {
+            return ['profileModal', 'backupModal', 'repositoryModal', 'verifyModal', 'downloadModal'].some(id => {
                 const modal = document.getElementById(id);
                 return modal && modal.style.display === 'flex';
             });
@@ -3907,9 +4162,24 @@
         document.getElementById('verifyModal').addEventListener('click', (e) => {
             if (e.target.id === 'verifyModal') closeVerifyModal();
         });
+        // Download modal events
+        document.getElementById('downloadModalClose').addEventListener('click', closeDownloadModal);
+        document.getElementById('downloadCancelBtn').addEventListener('click', closeDownloadModal);
+        document.getElementById('downloadModal').addEventListener('click', (e) => {
+            if (e.target.id === 'downloadModal') closeDownloadModal();
+        });
+        document.querySelectorAll('input[name="downloadFormat"]').forEach(input => {
+            input.addEventListener('change', updateDownloadForm);
+        });
+        document.getElementById('downloadForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            submitDownload();
+        });
+
         document.addEventListener('keydown', (e) => {
             if (e.key !== 'Escape') return;
-            if (document.getElementById('verifyModal').style.display === 'flex') closeVerifyModal();
+            if (document.getElementById('downloadModal').style.display === 'flex') closeDownloadModal();
+            else if (document.getElementById('verifyModal').style.display === 'flex') closeVerifyModal();
             else if (document.getElementById('backupModal').style.display === 'flex') cancelBackup();
         });
 

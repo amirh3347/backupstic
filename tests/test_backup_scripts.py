@@ -176,6 +176,65 @@ class BackupScriptIntegrationTests(unittest.TestCase):
             self.assertFalse((backup_base / 'backup.state').exists())
             self.assertTrue((backup_base / 'repositories.json').exists())
 
+    def test_profile_backup_queues_post_backup_health_check(self):
+        new_id = 'b' * 64
+        with tempfile.TemporaryDirectory() as temp_dir:
+            runtime = Path(temp_dir)
+            fake_bin = runtime / 'bin'
+            fake_bin.mkdir()
+            self._executable(
+                fake_bin / 'redis-cli',
+                '#!/bin/sh\nfor last; do :; done\nprintf REDIS0011 > "$last"\n',
+            )
+            self._executable(
+                fake_bin / 'restic',
+                '#!/bin/sh\n'
+                'case "$*" in\n'
+                '  "snapshots --tag profile:"*" --json")\n'
+                f'    printf \'[{{"id":"{"a" * 64}","time":"2026-01-01T00:00:00Z"}},'
+                f'{{"id":"{new_id}","time":"2026-01-02T00:00:00Z"}}]\\n\' ;;\n'
+                '  *) exit 0 ;;\n'
+                'esac\n',
+            )
+            backup_base = runtime / 'backups'
+            env = os.environ.copy()
+            env.update({
+                'PATH': f"{fake_bin}:{Path(sys.executable).parent}:{env['PATH']}",
+                'BACKUP_BASE': str(backup_base),
+                'RESTIC_REPO': str(backup_base / 'restic-repo'),
+                'RESTIC_PASSWORD': 'r' * 48,
+                'PROFILE_SECRET_KEY': 'p' * 48,
+                'JWT_SECRET_KEY': 'j' * 48,
+                'PROFILES_STORAGE': str(backup_base / 'profiles.json'),
+                'RESTIC_REPOSITORIES_STORAGE': str(backup_base / 'repositories.json'),
+            })
+            create = subprocess.run(
+                [sys.executable, '-c', (
+                    'import json, sys; sys.path.insert(0, "backend")\n'
+                    'from profiles import ProfileStorage\n'
+                    'storage = ProfileStorage(sys.argv[1])\n'
+                    'for name, verify in (("checked", True), ("unchecked", False)):\n'
+                    '    print(storage.create({"name": name, "type": "redis", "host": "redis.internal",'
+                    ' "port": 6379, "schedule": "0 2 * * *", "verify_after_backup": verify})["id"])\n'
+                ), str(backup_base / 'profiles.json')],
+                cwd=PROJECT_ROOT, env=env, capture_output=True, text=True, timeout=20, check=True,
+            )
+            checked_id, unchecked_id = create.stdout.split()
+
+            for profile_id in (unchecked_id, checked_id):
+                result = subprocess.run(
+                    ['bash', 'scripts/backup-all.sh', 'profile', profile_id],
+                    cwd=PROJECT_ROOT, env=env, capture_output=True, text=True, timeout=30, check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+            queued = list((backup_base / 'verify-queue').iterdir())
+            self.assertEqual([path.name for path in queued], [f'{new_id}.json'])
+            item = json.loads(queued[0].read_text())
+            self.assertEqual(item['profile_id'], checked_id)
+            self.assertEqual(item['repository_id'], 'default')
+            self.assertIn(f'Queued post-backup health check for snapshot {new_id[:8]}', result.stdout)
+
     @staticmethod
     def _executable(path, contents):
         path.write_text(contents)

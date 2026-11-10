@@ -54,6 +54,9 @@ MAX_REPORTED_MISMATCHES = 20
 CODEC_SUFFIX = {"gzip": "gz", "bzip2": "bz2", "xz": "xz"}
 REDIS_CHECK_TIMEOUT = 1800
 HISTORY_MAX_AGE_SECONDS = 365 * 24 * 3600
+QUEUE_DIR = "verify-queue"
+QUEUE_MAX_AGE_SECONDS = 7 * 24 * 3600
+TRIGGERS = {"manual", "after_backup"}
 DISK_HEADROOM_BYTES = 64 * 1024 * 1024
 
 
@@ -213,6 +216,65 @@ class VerificationStore:
                 pass
 
 
+class VerifyQueue:
+    """Snapshots waiting for an automatic post-backup health check.
+
+    backup-all.sh drops one ``<snapshot_id>.json`` file per new snapshot of a
+    profile with ``verify_after_backup`` enabled; the dashboard drains them one
+    at a time under the verification lock. Dotfiles are in-flight writes.
+    """
+
+    def __init__(self, base_dir: str):
+        self.root = Path(base_dir) / QUEUE_DIR
+
+    def enqueue(self, snapshot_id: str, repository_id: str = "default", **extra: Any) -> None:
+        if not SNAPSHOT_ID_RE.fullmatch(snapshot_id or ""):
+            raise ValueError("Invalid snapshot id")
+        self.root.mkdir(parents=True, exist_ok=True)
+        item = {"snapshot_id": snapshot_id, "repository_id": repository_id or "default",
+                "queued_at": utc_now(), **extra}
+        fd, tmp = tempfile.mkstemp(dir=self.root, prefix=".tmp-", suffix=".json")
+        with os.fdopen(fd, "w") as handle:
+            json.dump(item, handle)
+        os.replace(tmp, self.root / f"{snapshot_id}.json")
+
+    def pending(self, max_age_seconds: int = QUEUE_MAX_AGE_SECONDS) -> List[Dict[str, Any]]:
+        """Valid queue entries, oldest first. Unreadable or expired entries are dropped."""
+        if not self.root.is_dir():
+            return []
+        cutoff = time.time() - max_age_seconds
+        items = []
+        for path in self.root.glob("*.json"):
+            if path.name.startswith("."):
+                continue
+            try:
+                if path.stat().st_mtime < cutoff:
+                    path.unlink()
+                    continue
+                with open(path, encoding="utf-8") as handle:
+                    item = json.load(handle)
+            except (OSError, ValueError):
+                continue
+            if (not isinstance(item, dict) or item.get("snapshot_id") != path.stem
+                    or not SNAPSHOT_ID_RE.fullmatch(path.stem)):
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
+                continue
+            items.append(item)
+        items.sort(key=lambda item: str(item.get("queued_at") or ""))
+        return items
+
+    def remove(self, snapshot_id: str) -> None:
+        if not SNAPSHOT_ID_RE.fullmatch(snapshot_id or ""):
+            return
+        try:
+            (self.root / f"{snapshot_id}.json").unlink()
+        except OSError:
+            pass
+
+
 def summarize(state: Dict[str, Any]) -> Dict[str, Any]:
     """Compact form for list views."""
     return {
@@ -225,10 +287,12 @@ def summarize(state: Dict[str, Any]) -> Dict[str, Any]:
         "finished_at": state.get("finished_at"),
         "error": state.get("error", ""),
         "summary": state.get("summary", {}),
+        "trigger": state.get("trigger", "manual"),
     }
 
 
-def new_state(snapshot: Dict[str, Any], repo: Dict[str, Any], requested_by: str = "") -> Dict[str, Any]:
+def new_state(snapshot: Dict[str, Any], repo: Dict[str, Any], requested_by: str = "",
+              trigger: str = "manual") -> Dict[str, Any]:
     snapshot_id = snapshot["id"]
     return {
         "id": str(uuid.uuid4()),
@@ -239,6 +303,7 @@ def new_state(snapshot: Dict[str, Any], repo: Dict[str, Any], requested_by: str 
         "repository_name": repo.get("name") or "",
         "profile_name": snapshot.get("profile_name") or "",
         "requested_by": requested_by,
+        "trigger": trigger if trigger in TRIGGERS else "manual",
         "status": "queued",
         "current_step": None,
         "started_at": utc_now(),

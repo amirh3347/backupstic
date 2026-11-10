@@ -186,6 +186,7 @@ Request:
   "schedule": "0 2 * * *",
   "max_backups": 4,
   "repository_id": "default",
+  "verify_after_backup": true,
   "host": "192.168.11.74",
   "port": 5432,
   "username": "postgres",
@@ -767,6 +768,24 @@ restic restore latest --target ./restore-output
 
 رمز مورد نیاز همان `password` مخزن Restic مربوط به snapshot است. این password از API برنمی‌گردد و باید از تنظیمات امن خودتان داشته باشید.
 
+### Download Plain Backup (بدون رمز و بدون پوشه اضافه)
+
+```http
+POST /api/backup/{backup_id}/download-plain
+Content-Type: application/json
+
+{"password": "<restic repository password>"}
+```
+
+snapshot روی سرور restore و decrypt می‌شود و خود فایل‌های backup بدون repository رستیک و بدون مسیرهای `var/backups/.staging/<id>/` برگردانده می‌شوند:
+
+- اگر snapshot فقط یک فایل gzip داشته باشد (مثلاً `app_20260101_020000.sql.gz` یا `mongo_….tar.gz`؛ فایل‌های `*.manifest.json` در نظر گرفته نمی‌شوند)، همان فایل مستقیم دانلود می‌شود.
+- در غیر این صورت یک `<profile>_<YYYYMMDD_HHMMSS>_<short_id>.tar.gz` ساخته می‌شود که همه فایل‌ها مستقیماً در ریشه آن هستند.
+
+نام فایل در header `Content-Disposition` است. چون خروجی رمز ندارد، `password` باید همان رمز مخزن Restic همان snapshot باشد (توکن ورود به تنهایی کافی نیست).
+
+خطاها: `400` اگر password خالی یا id نامعتبر باشد، `403` برای password اشتباه (با فیلد `attempts_left`)، `404` اگر snapshot پیدا نشود، `429` بعد از `PLAIN_DOWNLOAD_MAX_FAILURES` (پیش‌فرض `5`) password اشتباه در `PLAIN_DOWNLOAD_FAILURE_WINDOW` ثانیه (پیش‌فرض `300`) با header `Retry-After`، `507` اگر فضای دیسک کافی نباشد.
+
 ### Delete Backup Snapshot
 
 ```http
@@ -795,6 +814,8 @@ Response:
 7. `postgres` — restore واقعی هر dump پستگرس روی یک PostgreSQL موقت و اختصاصی (`VERIFY_POSTGRES_URL`). هر دیتابیس در یک دیتابیس موقت `backupstic_verify_*` restore و بعد حذف می‌شود. اگر تنظیم نشده باشد یا dump پستگرسی وجود نداشته باشد، status این step برابر `skipped` است و روی نتیجه کلی اثری ندارد
 
 کار در background اجرا می‌شود و فقط یک verification هم‌زمان مجاز است. حدود ۳ برابر حجم backup فضای موقت لازم دارد و فایل‌های موقت در پایان پاک می‌شوند.
+
+**Health check خودکار بعد از هر backup:** اگر در profile مقدار `verify_after_backup` برابر `true` باشد، `backup-all.sh` بعد از ساخت snapshot جدید آن را در `verify-queue/<snapshot_id>.json` قرار می‌دهد. dashboard هر `AUTO_VERIFY_POLL_SECONDS` ثانیه (پیش‌فرض `15`؛ `0` = غیرفعال) صف را چک می‌کند و وقتی هیچ backup و verification دیگری در حال اجرا نباشد، همین health check را اجرا می‌کند. در نتیجه این verificationها `trigger` برابر `after_backup` است (برای اجرای دستی `manual`). تا زمانی که در صف است، `GET /api/verifications` برای آن snapshot وضعیت `scheduled` برمی‌گرداند.
 
 ```http
 POST /api/backup/{backup_id}/verify
@@ -831,6 +852,8 @@ GET /api/backup/{backup_id}/verify
 ```text
 queued | running | passed | warning | failed | interrupted
 ```
+
+(در `GET /api/verifications` مقدار `scheduled` هم ممکن است: یعنی health check خودکار در صف است و هنوز شروع نشده.)
 
 مقدار `status` هر step یکی از `pending | running | passed | warning | failed | skipped` است. `archives` لیست فایل‌های تست‌شده با `path`, `format`, `size`, `status`, `detail` است. `postgres` (در صورت اجرا) لیست dumpها با `path`, `status`, `detail`, `databases`, `tables`, `rows`, `errors` است. `summary` شامل `postgres_version` و `files`, `bytes`, `archives_total`, `archives_passed`, `archives_warning`, `archives_failed` می‌شود. اگر dashboard وسط کار restart شود، status به `interrupted` تغییر می‌کند.
 

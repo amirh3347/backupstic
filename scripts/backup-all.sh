@@ -51,6 +51,35 @@ load_restic_repository() {
     fi
 }
 
+# Hand a fresh snapshot to the dashboard for an automatic health check
+# (restore -> decrypt -> test archives). Best effort: never fails the backup.
+queue_post_backup_verification() {
+    local snapshot_id="$1"
+    local queue_dir="$BACKUP_BASE/verify-queue"
+    local tmp
+    if [[ ! "$snapshot_id" =~ ^[0-9a-f]{64}$ ]]; then
+        log "Warning: could not determine the new snapshot id; skipping post-backup health check"
+        return 0
+    fi
+    if ! mkdir -p "$queue_dir" || ! tmp=$(mktemp "$queue_dir/.tmp.XXXXXX"); then
+        log "Warning: could not queue post-backup health check for ${snapshot_id:0:8}"
+        return 0
+    fi
+    if jq -n \
+        --arg snapshot_id "$snapshot_id" \
+        --arg repository_id "$PROFILE_REPOSITORY_ID" \
+        --arg profile_id "$PROFILE_ID" \
+        --arg profile_name "$PROFILE_NAME" \
+        --arg queued_at "$(date -u +%Y-%m-%dT%H:%M:%S+00:00)" \
+        '{snapshot_id:$snapshot_id,repository_id:$repository_id,profile_id:$profile_id,profile_name:$profile_name,queued_at:$queued_at}' \
+        > "$tmp" && mv -f "$tmp" "$queue_dir/$snapshot_id.json"; then
+        log "Queued post-backup health check for snapshot ${snapshot_id:0:8}"
+    else
+        rm -f "$tmp"
+        log "Warning: could not queue post-backup health check for ${snapshot_id:0:8}"
+    fi
+}
+
 ensure_restic_repository() {
     log "Checking restic repository: $RESTIC_REPOSITORY"
     if restic snapshots &>/dev/null; then
@@ -112,7 +141,7 @@ if [[ "$MODE" == "profile" ]]; then
     fi
     
     # Fetch profile data from storage (JSON file)
-    PROFILES_FILE="/var/backups/profiles.json"
+    PROFILES_FILE="${PROFILES_STORAGE:-/var/backups/profiles.json}"
     if [[ ! -f "$PROFILES_FILE" ]]; then
         log "Error: Profiles file not found: $PROFILES_FILE"
         exit 1
@@ -136,6 +165,7 @@ if [[ "$MODE" == "profile" ]]; then
         PROFILE_ENABLED=$(echo "$PROFILE_JSON" | jq -r '.enabled // true')
         PROFILE_REPOSITORY_ID=$(echo "$PROFILE_JSON" | jq -r '.repository_id // "default"')
         PROFILE_MAX_BACKUPS=$(echo "$PROFILE_JSON" | jq -r '.max_backups // 0')
+        PROFILE_VERIFY_AFTER_BACKUP=$(echo "$PROFILE_JSON" | jq -r '.verify_after_backup // false')
     else
         # Fallback without jq (basic parsing)
         log "Warning: jq not installed, using basic profile parsing"
@@ -143,6 +173,7 @@ if [[ "$MODE" == "profile" ]]; then
         PROFILE_TYPE="unknown"
         PROFILE_NAME="unknown"
         PROFILE_ENABLED="true"
+        PROFILE_VERIFY_AFTER_BACKUP="false"
     fi
     
     # Check if profile is enabled
@@ -256,6 +287,13 @@ if [[ "$MODE" == "profile" ]]; then
         # keeps retention correct even if the user later renames the profile.
         PROFILE_ID_TAG="profile:$PROFILE_ID"
         restic backup "$STAGE_DIR" --tag "$PROFILE_ID_TAG" --tag "$PROFILE_NAME" --tag "$PROFILE_TYPE"
+        NEW_SNAPSHOT_ID=""
+        if [[ "$PROFILE_VERIFY_AFTER_BACKUP" == "true" ]]; then
+            NEW_SNAPSHOT_ID=$(
+                restic snapshots --tag "$PROFILE_ID_TAG" --json 2>/dev/null |
+                jq -r 'max_by(.time) | .id // empty' 2>/dev/null
+            ) || NEW_SNAPSHOT_ID=""
+        fi
         log "Cleaning old snapshots..."
         if [[ "$PROFILE_MAX_BACKUPS" =~ ^[0-9]+$ && "$PROFILE_MAX_BACKUPS" -gt 0 ]]; then
             restic forget --tag "$PROFILE_ID_TAG" --keep-last "$PROFILE_MAX_BACKUPS" --group-by tags --prune
@@ -280,6 +318,9 @@ if [[ "$MODE" == "profile" ]]; then
             fi
         else
             restic forget --keep-daily "$RETENTION_DAYS" --keep-weekly "$RETENTION_WEEKLY" --keep-monthly "$RETENTION_MONTHLY" --prune
+        fi
+        if [[ "$PROFILE_VERIFY_AFTER_BACKUP" == "true" ]]; then
+            queue_post_backup_verification "$NEW_SNAPSHOT_ID"
         fi
     else
         log "Warning: no backup files produced for profile $PROFILE_NAME; skipping restic push"

@@ -73,6 +73,13 @@ snapshot, builds the encrypted download bundle, extracts it, opens it with the
 repository password, compares checksums, and fully reads every archive.
 Redis RDB files are checked with `redis-check-rdb`.
 
+To check every new backup automatically, enable **Run a health check after
+every backup** on the profile. After each successful backup the snapshot is
+queued and the dashboard runs the same check as soon as no other backup or
+check is running (`AUTO_VERIFY_POLL_SECONDS`, default 15; `0` disables it). The
+Health column shows "Check queued" until it starts. The dashboard container must
+be running for queued checks to be processed.
+
 PostgreSQL dumps can only be proven restorable by PostgreSQL itself. To enable
 that step, run a dedicated scratch server next to the dashboard:
 
